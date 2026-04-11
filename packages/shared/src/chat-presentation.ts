@@ -174,6 +174,22 @@ export function buildToolUsePresentation(item: ToolUseLike): RenderableToolUse {
     });
   }
 
+  if (item.tool_name === 'Write' && typeof item.input.content === 'string') {
+    const filePath =
+      typeof item.input.file_path === 'string'
+        ? item.input.file_path
+        : undefined;
+    if (filePath) summaryPills.push(filePath);
+
+    diffCards.push({
+      title: '新規作成',
+      filePath,
+      oldText: '',
+      newText: item.input.content,
+      pills: [],
+    });
+  }
+
   if (item.tool_name === 'MultiEdit' && Array.isArray(item.input.edits)) {
     const baseFilePath =
       typeof item.input.file_path === 'string'
