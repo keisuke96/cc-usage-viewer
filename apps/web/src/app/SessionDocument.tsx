@@ -668,6 +668,7 @@ function MessageView({
             registerSearchTarget(searchId, node);
           },
           'data-search-id': searchId,
+          ...(message.uuid ? { id: `msg-${message.uuid}` } : {}),
         }
       : {};
 
@@ -870,6 +871,7 @@ export function buildTimelineOption(
     },
     tooltip: {
       trigger: 'axis',
+      confine: true,
       axisPointer: { type: 'shadow' },
       backgroundColor: 'rgba(24,24,24,0.94)',
       borderColor: 'rgba(255,255,255,0.12)',
@@ -1054,6 +1056,26 @@ function UsageTimelineChart({
       height: chartHeight,
     });
   }, [chartHeight, chartWidth, mode, points]);
+
+  useEffect(() => {
+    if (mode !== 'interactive' || !chartRef.current) {
+      return;
+    }
+
+    const chart = chartRef.current;
+    const handler = (params: { dataIndex: number }) => {
+      const uuid = points[params.dataIndex]?.uuid;
+      if (uuid) {
+        document
+          .getElementById(`msg-${uuid}`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    };
+    chart.on('click', handler);
+    return () => {
+      chart.off('click', handler);
+    };
+  }, [mode, points]);
 
   const svgMarkup = useMemo(() => {
     if (mode !== 'export' || points.length === 0) {

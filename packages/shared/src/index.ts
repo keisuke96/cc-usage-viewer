@@ -71,6 +71,7 @@ export const chatContentItemSchema = z.discriminatedUnion('type', [
 ]);
 
 export const chatMessageSchema = z.object({
+  uuid: z.string().nullable(),
   role: z.union([z.literal('user'), z.literal('assistant')]),
   content: z.array(chatContentItemSchema),
   timestamp: z.string().nullable(),
@@ -104,6 +105,7 @@ export const tokenStatsSchema = z.object({
 });
 
 export const usageTimelinePointSchema = z.object({
+  uuid: z.string().nullable(),
   timestamp: z.string().nullable(),
   model: z.string(),
   input_tokens: z.number(),

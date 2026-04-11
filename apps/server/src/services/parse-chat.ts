@@ -159,6 +159,7 @@ export async function parseChat(jsonlPath: string): Promise<ChatMessage[]> {
     }
 
     messages.push({
+      uuid,
       role,
       content: parsedContent,
       timestamp: typeof record.timestamp === 'string' ? record.timestamp : null,

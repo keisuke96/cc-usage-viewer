@@ -508,6 +508,7 @@ async function extractUsageTimeline(
     const ts = asString(obj.timestamp) || null;
 
     const point = {
+      uuid: asString(obj.uuid) || null,
       timestamp: ts,
       model,
       input_tokens: inputTokens,
