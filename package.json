@@ -1,0 +1,21 @@
+{
+  "name": "cc-usage-viewer",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.18.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @ccuv/server --filter @ccuv/web dev",
+    "dev:server": "pnpm --filter @ccuv/server dev",
+    "dev:web": "pnpm --filter @ccuv/web dev",
+    "build": "pnpm -r build",
+    "check": "pnpm -r check",
+    "test": "pnpm -r test",
+    "format": "biome format --write .",
+    "lint": "biome check ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.2.4",
+    "@types/node": "^24.12.2",
+    "typescript": "^5.9.3"
+  }
+}
