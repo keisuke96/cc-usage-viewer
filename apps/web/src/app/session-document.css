@@ -431,6 +431,17 @@
   box-shadow: 0 0 0 1px rgba(88, 166, 255, 0.22);
 }
 
+@keyframes timeline-highlight-blink {
+  0%, 100% { outline: 2px solid transparent; outline-offset: 3px; }
+  20%, 60% { outline: 2px solid rgba(88, 166, 255, 0.8); outline-offset: 3px; }
+  40%, 80% { outline: 2px solid transparent; outline-offset: 3px; }
+}
+
+.session-message--timeline-highlight {
+  border-radius: 16px;
+  animation: timeline-highlight-blink 1.2s ease-out forwards;
+}
+
 .session-message__row {
   display: flex;
   gap: 14px;

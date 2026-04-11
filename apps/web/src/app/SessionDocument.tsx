@@ -1065,11 +1065,18 @@ function UsageTimelineChart({
     const chart = chartRef.current;
     const handler = (params: { dataIndex: number }) => {
       const uuid = points[params.dataIndex]?.uuid;
-      if (uuid) {
-        document
-          .getElementById(`msg-${uuid}`)
-          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
+      if (!uuid) return;
+      const el = document.getElementById(`msg-${uuid}`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      el.classList.remove('session-message--timeline-highlight');
+      void el.offsetWidth; // reflow to restart animation
+      el.classList.add('session-message--timeline-highlight');
+      el.addEventListener(
+        'animationend',
+        () => el.classList.remove('session-message--timeline-highlight'),
+        { once: true },
+      );
     };
     chart.on('click', handler);
     return () => {
