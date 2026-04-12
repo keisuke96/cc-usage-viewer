@@ -48,7 +48,7 @@ export function buildSessionDocumentSections(session: Session): SessionDocumentS
       filePath: subagent.jsonl_path,
       kind: 'subagent' as const,
       title: subagent.description || subagent.agent_type,
-      subtitle: `subagent · ${subagent.agent_type}`,
+      subtitle: subagent.agent_type,
     })),
     ...session.team_sessions.map((teamSession) => ({
       filePath: teamSession.jsonl_path,
