@@ -30,6 +30,7 @@ import {
   sessionDisplayLabel,
 } from '../lib/session-document';
 import { fetchProjects, fetchSessions } from '../lib/api';
+import { fmtTokens, formatModelName } from '../lib/analysis-format';
 import { downloadSessionExportHtmlClient } from '../lib/session-export';
 import { SessionDocument } from './SessionDocument';
 
@@ -472,23 +473,43 @@ export function App() {
                     variant="scrollable"
                     scrollButtons="auto"
                   >
-                    {documentQuery.data.sections.map((section, index) => (
-                      <Tab
-                        key={section.filePath}
-                        label={
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            {section.kind === 'team' ? (
-                              <GroupsIcon sx={{ fontSize: 13 }} />
-                            ) : section.kind === 'subagent' ? (
-                              <SmartToyIcon sx={{ fontSize: 13 }} />
-                            ) : null}
-                            <span>{section.title}</span>
-                          </Box>
-                        }
-                        value={index}
-                        sx={{ minHeight: 36, py: 0, fontSize: 12 }}
-                      />
-                    ))}
+                    {documentQuery.data.sections.map((section, index) => {
+                      const total = section.analysis.total;
+                      const totalTokens =
+                        total.input_tokens +
+                        total.output_tokens +
+                        total.cache_read_tokens +
+                        total.cache_creation_5m +
+                        total.cache_creation_1h;
+                      const models = Object.keys(section.analysis.by_model)
+                        .map(formatModelName)
+                        .join(' / ');
+
+                      return (
+                        <Tab
+                          key={section.filePath}
+                          label={
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                {section.kind === 'team' ? (
+                                  <GroupsIcon sx={{ fontSize: 13 }} />
+                                ) : section.kind === 'subagent' ? (
+                                  <SmartToyIcon sx={{ fontSize: 13 }} />
+                                ) : null}
+                                <span>{section.title}</span>
+                              </Box>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, color: 'text.disabled', fontSize: 10, lineHeight: 1.4 }}>
+                                {models && <span>{models}</span>}
+                                {models && totalTokens > 0 && <span>·</span>}
+                                {totalTokens > 0 && <span>{fmtTokens(totalTokens)}</span>}
+                              </Box>
+                            </Box>
+                          }
+                          value={index}
+                          sx={{ minHeight: 44, py: 0.5, fontSize: 12, alignItems: 'flex-start' }}
+                        />
+                      );
+                    })}
                   </Tabs>
                 </Box>
               )}
