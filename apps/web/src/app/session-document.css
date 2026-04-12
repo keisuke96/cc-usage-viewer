@@ -86,13 +86,17 @@
 }
 
 .analysis-summary__header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
   margin-bottom: 16px;
 }
 
 .analysis-summary__subtitle {
-  margin-top: 6px;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--session-text-2);
+  font-family: "SFMono-Regular", ui-monospace, Menlo, monospace;
   word-break: break-word;
 }
 

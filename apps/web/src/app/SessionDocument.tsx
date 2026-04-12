@@ -1610,7 +1610,7 @@ export function SessionDocument({
                 analysis={section.analysis}
                 mode={mode}
                 title={`${formatSectionKindLabel(section.kind)} Analysis`}
-                subtitle={section.title}
+                subtitle={section.kind !== 'session' ? section.subtitle : undefined}
                 dataFilePath={section.filePath}
                 className={[
                   'session-document__analysis',
