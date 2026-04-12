@@ -32,6 +32,9 @@ export function modelColor(name: string): string {
 
 export function formatModelName(name: string): string {
   const m = name.match(/(?:claude-)?(opus|sonnet|haiku)-(\d+)-(\d+)/i);
-  if (m) return `${m[1].toLowerCase()} ${m[2]}.${m[3]}`;
+  if (m) {
+    const model = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
+    return `${model} ${m[2]}.${m[3]}`;
+  }
   return name;
 }
