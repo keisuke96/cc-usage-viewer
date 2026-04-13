@@ -18,8 +18,9 @@ function parseContentItem(contentItem: JsonRecord): ChatContentItem | null {
     typeof contentItem.type === 'string' ? contentItem.type : '';
 
   if (contentType === 'text') {
-    const text =
+    const raw =
       typeof contentItem.text === 'string' ? contentItem.text.trim() : '';
+    const text = transformBashTags(raw);
     return text ? { type: 'text', text } : null;
   }
 
@@ -63,6 +64,22 @@ function parseContentItem(contentItem: JsonRecord): ChatContentItem | null {
   return null;
 }
 
+function transformBashTags(text: string): string {
+  return text
+    .replace(
+      /<bash-input>(.*?)<\/bash-input>/gs,
+      (_, cmd: string) => `\`! ${cmd.trim()}\``,
+    )
+    .replace(/<bash-stdout>(.*?)<\/bash-stdout>/gs, (_, out: string) => {
+      const trimmed = out.trim();
+      return trimmed ? `\`\`\`bash\n${trimmed}\n\`\`\`` : '';
+    })
+    .replace(/<bash-stderr>(.*?)<\/bash-stderr>/gs, (_, err: string) => {
+      const trimmed = err.trim();
+      return trimmed ? `\`\`\`bash\n${trimmed}\n\`\`\`` : '';
+    });
+}
+
 function parseStringContent(content: string): ChatContentItem[] {
   const text = content.trim();
   if (!text || shouldSkipPrefixedText(text)) {
@@ -85,7 +102,7 @@ function parseStringContent(content: string): ChatContentItem[] {
   return [
     {
       type: 'text',
-      text,
+      text: transformBashTags(text),
     },
   ];
 }
