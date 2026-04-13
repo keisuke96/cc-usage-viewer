@@ -54,12 +54,9 @@ export async function extractFirstUserMessage(
         continue;
       }
 
-      // `/commit` のような単独スラッシュコマンドは除外する。
-      if (
-        trimmedLine.startsWith('/') &&
-        !trimmedLine.includes(' ') &&
-        !trimmedLine.slice(1).includes('/')
-      ) {
+      // `/clear`, `/new` のような組み込みスラッシュコマンドは除外する。
+      const BUILTIN_COMMANDS = new Set(['/clear', '/new', '/exit', '/help']);
+      if (BUILTIN_COMMANDS.has(trimmedLine)) {
         continue;
       }
 
