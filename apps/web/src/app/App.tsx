@@ -1,5 +1,12 @@
 import type { Session } from '@ccuv/shared';
+
+// ひらがな・カタカナを正規化（カタカナ→ひらがな変換）して同一視する
+function normalizeKana(str: string): string {
+  return str.replace(/[\u30A1-\u30F6]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60));
+}
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import GroupsIcon from '@mui/icons-material/Groups';
+import SearchIcon from '@mui/icons-material/Search';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import {
   Alert,
@@ -7,15 +14,17 @@ import {
   Button,
   Chip,
   CircularProgress,
+  InputAdornment,
   List,
   ListItemButton,
   Stack,
   Tab,
   Tabs,
+  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import {
+import React, {
   useEffect,
   useMemo,
   useState,
@@ -62,6 +71,34 @@ function renderTimestamp(timestamp: string | null): string {
   }
 }
 
+function HighlightedText({ text, query, sx }: { text: string; query: string; sx?: object }) {
+  if (!query) {
+    return <span style={sx as React.CSSProperties}>{text}</span>;
+  }
+
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) {
+    return <span style={sx as React.CSSProperties}>{text}</span>;
+  }
+
+  return (
+    <span style={sx as React.CSSProperties}>
+      {text.slice(0, idx)}
+      <mark
+        style={{
+          background: 'rgba(255, 200, 0, 0.35)',
+          color: 'inherit',
+          borderRadius: 2,
+          padding: '0 1px',
+        }}
+      >
+        {text.slice(idx, idx + query.length)}
+      </mark>
+      {text.slice(idx + query.length)}
+    </span>
+  );
+}
+
 export function App() {
   const [selectedSectionTab, setSelectedSectionTab] = useState(0);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -69,6 +106,8 @@ export function App() {
   const [showEmptyProjects, setShowEmptyProjects] = useState(false);
   const [showEmptySessions, setShowEmptySessions] = useState(false);
   const [isExportingHtml, setIsExportingHtml] = useState(false);
+  const [projectSearch, setProjectSearch] = useState('');
+  const [sessionSearch, setSessionSearch] = useState('');
 
   const projectsQuery = useQuery({
     queryKey: ['projects'],
@@ -77,10 +116,23 @@ export function App() {
 
   const projects = projectsQuery.data ?? [];
 
-  const visibleProjects = useMemo(
-    () => (showEmptyProjects ? projects : projects.filter((project) => project.session_count > 0)),
-    [projects, showEmptyProjects],
-  );
+  const visibleProjects = useMemo(() => {
+    const base = showEmptyProjects ? projects : projects.filter((project) => project.session_count > 0);
+    if (!projectSearch) return base;
+    const q = normalizeKana(projectSearch.toLowerCase());
+    return base
+      .map((project) => {
+        const nameMatch = normalizeKana(project.display_name.toLowerCase()).includes(q);
+        const filteredWorktrees = project.worktrees.filter(
+          (wt) => normalizeKana(wt.display_name.toLowerCase()).includes(q),
+        );
+        if (nameMatch || filteredWorktrees.length > 0) {
+          return { ...project, worktrees: nameMatch ? project.worktrees : filteredWorktrees };
+        }
+        return null;
+      })
+      .filter((p): p is NonNullable<typeof p> => p !== null);
+  }, [projects, showEmptyProjects, projectSearch]);
 
   const hiddenProjectCount = useMemo(
     () => projects.filter((project) => project.session_count === 0).length,
@@ -101,10 +153,14 @@ export function App() {
 
   const sessions = sessionsQuery.data ?? [];
 
-  const visibleSessions = useMemo(
-    () => (showEmptySessions ? sessions : sessions.filter((session) => session.first_message)),
-    [sessions, showEmptySessions],
-  );
+  const visibleSessions = useMemo(() => {
+    const base = showEmptySessions ? sessions : sessions.filter((session) => session.first_message);
+    if (!sessionSearch) return base;
+    const q = normalizeKana(sessionSearch.toLowerCase());
+    return base.filter((session) =>
+      normalizeKana(session.first_message?.toLowerCase() ?? '').includes(q),
+    );
+  }, [sessions, showEmptySessions, sessionSearch]);
 
   const hiddenSessionCount = useMemo(
     () => sessions.filter((session) => !session.first_message).length,
@@ -123,10 +179,17 @@ export function App() {
     }
   }, [selectedSessionFile, sessions]);
 
-  const selectedProject = useMemo(
-    () => projects.find((project) => project.id === selectedProjectId) ?? null,
-    [projects, selectedProjectId],
-  );
+  const selectedProject = useMemo(() => {
+    if (!selectedProjectId) return null;
+    // Check base projects first, then worktrees
+    const base = projects.find((project) => project.id === selectedProjectId);
+    if (base) return base;
+    for (const project of projects) {
+      const wt = project.worktrees.find((w) => w.id === selectedProjectId);
+      if (wt) return { ...wt, worktrees: [] as typeof project.worktrees };
+    }
+    return null;
+  }, [projects, selectedProjectId]);
 
   const selectedDocumentPlan = useMemo(
     () =>
@@ -238,6 +301,26 @@ export function App() {
               </Button>
             )}
           </Box>
+          <Box sx={{ px: 1.5, py: 0.75, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
+            <TextField
+              size="small"
+              placeholder="プロジェクトを検索..."
+              value={projectSearch}
+              onChange={(e) => setProjectSearch(e.target.value)}
+              fullWidth
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+                    </InputAdornment>
+                  ),
+                  sx: { fontSize: 12 },
+                },
+              }}
+              sx={{ '& .MuiInputBase-root': { height: 28 } }}
+            />
+          </Box>
           <Box sx={{ flex: 1, overflowY: 'auto' }}>
             {projectsQuery.isLoading ? (
               <Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
@@ -253,37 +336,79 @@ export function App() {
                   {visibleProjects.map((project) => {
                     const isSelected = project.id === selectedProjectId;
                     return (
-                      <ListItemButton
-                        key={project.id}
-                        selected={isSelected}
-                        onClick={() => {
-                          setSelectedProjectId(project.id);
-                        }}
-                        sx={{
-                          py: 1,
-                          px: 2,
-                          borderLeft: 3,
-                          borderColor: isSelected ? 'primary.main' : 'transparent',
-                        }}
-                      >
-                        <Box>
-                          <Typography
-                            sx={{
-                              fontSize: 13,
-                              fontWeight: isSelected ? 700 : 400,
-                              lineHeight: 1.3,
-                            }}
-                          >
-                            {project.display_name}
-                          </Typography>
-                          <Typography
-                            variant="caption"
-                            sx={{ color: 'text.secondary', fontSize: 11 }}
-                          >
-                            {project.session_count} sessions
-                          </Typography>
-                        </Box>
-                      </ListItemButton>
+                      <Box key={project.id}>
+                        <ListItemButton
+                          selected={isSelected}
+                          onClick={() => {
+                            setSelectedProjectId(project.id);
+                          }}
+                          sx={{
+                            py: 1,
+                            px: 2,
+                            borderLeft: 3,
+                            borderColor: isSelected ? 'primary.main' : 'transparent',
+                          }}
+                        >
+                          <Box>
+                            <Typography
+                              sx={{
+                                fontSize: 13,
+                                fontWeight: isSelected ? 700 : 400,
+                                lineHeight: 1.3,
+                              }}
+                            >
+                              <HighlightedText text={project.display_name} query={projectSearch} />
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              sx={{ color: 'text.secondary', fontSize: 11 }}
+                            >
+                              {project.session_count} sessions
+                            </Typography>
+                          </Box>
+                        </ListItemButton>
+                        {project.worktrees.map((wt) => {
+                          const isWtSelected = wt.id === selectedProjectId;
+                          return (
+                            <ListItemButton
+                              key={wt.id}
+                              selected={isWtSelected}
+                              onClick={() => setSelectedProjectId(wt.id)}
+                              sx={{
+                                py: 0.75,
+                                pl: 3.5,
+                                pr: 2,
+                                borderLeft: 3,
+                                borderColor: isWtSelected ? 'primary.main' : 'transparent',
+                              }}
+                            >
+                              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+                                <AccountTreeIcon
+                                  sx={{ fontSize: 12, color: 'text.disabled', mt: '3px', flexShrink: 0 }}
+                                />
+                                <Box>
+                                  <Typography
+                                    sx={{
+                                      fontSize: 12,
+                                      fontWeight: isWtSelected ? 700 : 400,
+                                      lineHeight: 1.3,
+                                      color: isWtSelected ? 'text.primary' : 'text.secondary',
+                                    }}
+                                  >
+                                    <HighlightedText text={wt.display_name} query={projectSearch} />
+                                  </Typography>
+                                  <Typography
+                                    variant="caption"
+                                    sx={{ color: 'text.disabled', fontSize: 10 }}
+                                  >
+                                    {wt.session_count} sessions
+                                  </Typography>
+                                </Box>
+                              </Box>
+                            </ListItemButton>
+                          );
+                        })}
+                      </Box>
                     );
                   })}
                 </List>
@@ -343,6 +468,26 @@ export function App() {
               </Button>
             )}
           </Box>
+          <Box sx={{ px: 1.5, py: 0.75, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
+            <TextField
+              size="small"
+              placeholder="セッションを検索..."
+              value={sessionSearch}
+              onChange={(e) => setSessionSearch(e.target.value)}
+              fullWidth
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+                    </InputAdornment>
+                  ),
+                  sx: { fontSize: 12 },
+                },
+              }}
+              sx={{ '& .MuiInputBase-root': { height: 28 } }}
+            />
+          </Box>
           <Box sx={{ flex: 1, overflowY: 'auto' }}>
             {sessionsQuery.isLoading ? (
               <Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
@@ -381,7 +526,7 @@ export function App() {
                         lineHeight: 1.4,
                       }}
                     >
-                      {sessionDisplayLabel(session)}
+                      <HighlightedText text={sessionDisplayLabel(session)} query={sessionSearch} />
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.25 }}>
                       <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>

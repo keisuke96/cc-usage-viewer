@@ -7,11 +7,19 @@ export const healthResponseSchema = z.object({
 
 export type HealthResponse = z.infer<typeof healthResponseSchema>;
 
+export const worktreeProjectSchema = z.object({
+  id: z.string(),
+  display_name: z.string(),
+  path: z.string(),
+  session_count: z.number().int().nonnegative(),
+});
+
 export const projectSchema = z.object({
   id: z.string(),
   display_name: z.string(),
   path: z.string(),
   session_count: z.number().int().nonnegative(),
+  worktrees: z.array(worktreeProjectSchema),
 });
 
 export const subagentSchema = z.object({
@@ -80,6 +88,7 @@ export const chatMessageSchema = z.object({
 
 export const chatMessagesResponseSchema = z.array(chatMessageSchema);
 
+export type WorktreeProject = z.infer<typeof worktreeProjectSchema>;
 export type Project = z.infer<typeof projectSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 export type Subagent = z.infer<typeof subagentSchema>;
