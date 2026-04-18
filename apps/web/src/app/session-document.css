@@ -93,6 +93,24 @@
   margin-bottom: 16px;
 }
 
+.analysis-summary__header--toggle {
+  cursor: pointer;
+  user-select: none;
+  border-radius: 6px;
+  padding: 4px 6px;
+  margin-left: -6px;
+}
+
+.analysis-summary__header--toggle:hover {
+  background: var(--session-panel);
+}
+
+.analysis-summary__chevron {
+  font-size: 12px;
+  color: var(--session-text-3);
+  flex-shrink: 0;
+}
+
 .analysis-summary__subtitle {
   font-size: 11px;
   color: var(--session-text-2);
@@ -154,10 +172,46 @@
   color: var(--session-text-2);
 }
 
+.analysis-block__toggle-header {
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: baseline;
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin-left: -4px;
+}
+
+.analysis-block__toggle-header:hover {
+  background: var(--session-panel);
+}
+
+.analysis-block__chevron {
+  font-size: 10px;
+  color: var(--session-text-3);
+}
+
 .table-wrap,
-.diff-scroll,
-.timeline-chart-scroll {
+.diff-scroll {
   overflow-x: auto;
+}
+
+.timeline-chart-scroll {
+  overflow-x: scroll;
+}
+
+.timeline-chart-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.timeline-chart-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+}
+
+.timeline-chart-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 3px;
 }
 
 .analysis-table {
@@ -309,11 +363,12 @@
 
 .session-search {
   position: sticky;
-  top: 0;
+  bottom: 16px;
   z-index: 4;
-  width: 100%;
-  margin-bottom: 16px;
-  padding: 14px 16px;
+  width: fit-content;
+  margin-left: auto;
+  margin-top: 16px;
+  padding: 10px 14px;
   border: 1px solid var(--session-border);
   border-radius: 14px;
   background: rgba(17, 17, 17, 0.94);
@@ -321,18 +376,34 @@
   transition:
     padding 140ms ease,
     background-color 140ms ease,
-    border-color 140ms ease,
-    transform 140ms ease;
+    border-color 140ms ease;
 }
 
 .session-search--compact {
-  width: fit-content;
-  max-width: min(100%, 220px);
-  margin-left: auto;
-  margin-bottom: 8px;
-  padding: 8px 10px;
-  border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(17, 17, 17, 0.76);
+  padding: 8px;
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(17, 17, 17, 0.72);
+  display: flex;
+  gap: 4px;
+}
+
+.session-search__icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--session-text-2);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.session-search__icon-btn:hover {
+  color: var(--session-text);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .session-search__row {
@@ -342,9 +413,9 @@
 }
 
 .session-search__input {
-  flex: 1 1 260px;
+  flex: 1 1 220px;
   min-width: 160px;
-  height: 38px;
+  height: 34px;
   padding: 0 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
@@ -352,23 +423,9 @@
   color: var(--session-text);
   font: inherit;
   transition:
-    max-width 140ms ease,
     background-color 140ms ease,
     border-color 140ms ease,
     box-shadow 140ms ease;
-}
-
-.session-search--compact .session-search__row {
-  justify-content: flex-end;
-}
-
-.session-search--compact .session-search__input {
-  flex: 0 1 180px;
-  width: 180px;
-  max-width: 180px;
-  height: 32px;
-  padding: 0 10px;
-  border-radius: 9px;
 }
 
 .session-search__input::placeholder {
@@ -382,6 +439,7 @@
 }
 
 .session-search__meta {
+  flex-shrink: 0;
   min-width: 56px;
   color: var(--session-text-2);
   font-size: 12px;
@@ -390,6 +448,7 @@
 }
 
 .session-search__button {
+  flex-shrink: 0;
   height: 34px;
   padding: 0 11px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -397,6 +456,7 @@
   background: rgba(255, 255, 255, 0.07);
   color: var(--session-text);
   font-size: 12px;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -640,7 +700,7 @@
   width: 100%;
   margin: 12px 0;
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
 }
 
 .markdown-body th,

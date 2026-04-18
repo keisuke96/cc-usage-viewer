@@ -53,16 +53,27 @@ async function readSessionIndex(
   }
 }
 
+async function readFirstTimestamp(jsonlPath: string): Promise<string> {
+  try {
+    const content = await readFile(jsonlPath, 'utf8');
+    const firstLine = content.slice(0, content.indexOf('\n'));
+    const obj = JSON.parse(firstLine) as { timestamp?: unknown };
+    return typeof obj.timestamp === 'string' ? obj.timestamp : '';
+  } catch {
+    return '';
+  }
+}
+
 async function readSubagents(sessionDir: string): Promise<Subagent[]> {
   const subagentsDir = path.join(sessionDir, 'subagents');
 
   try {
     const entries = await readdir(subagentsDir, { withFileTypes: true });
-    const agentFiles = entries
-      .filter((entry) => entry.isFile() && entry.name.endsWith('.jsonl'))
-      .sort((left, right) => left.name.localeCompare(right.name));
+    const agentFiles = entries.filter(
+      (entry) => entry.isFile() && entry.name.endsWith('.jsonl'),
+    );
 
-    return Promise.all(
+    const subagents = await Promise.all(
       agentFiles.map(async (entry) => {
         const agentFilePath = path.join(subagentsDir, entry.name);
         const metaPath = agentFilePath.replace(/\.jsonl$/, '.meta.json');
@@ -85,16 +96,53 @@ async function readSubagents(sessionDir: string): Promise<Subagent[]> {
           // metadata は任意ファイルなので無視する
         }
 
+        const timestamp = await readFirstTimestamp(agentFilePath);
+
         return {
           agent_id: entry.name.replace(/\.jsonl$/, ''),
           jsonl_path: agentFilePath,
           agent_type: agentType,
           description,
+          timestamp,
         };
       }),
     );
+
+    subagents.sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+
+    return subagents.map(({ timestamp: _timestamp, ...rest }) => rest);
   } catch {
     return [];
+  }
+}
+
+async function countRequests(jsonlPath: string): Promise<number> {
+  try {
+    const content = await readFile(jsonlPath, 'utf8');
+    const seen = new Set<string>();
+    let count = 0;
+    for (const line of content.split('\n')) {
+      if (!line.trim() || !line.includes('"type":"assistant"')) continue;
+      try {
+        const obj = JSON.parse(line) as {
+          type?: unknown;
+          requestId?: unknown;
+          message?: { usage?: unknown };
+        };
+        if (obj.type !== 'assistant' || !obj.message?.usage) continue;
+        const rid = typeof obj.requestId === 'string' ? obj.requestId : null;
+        if (rid) {
+          if (seen.has(rid)) continue;
+          seen.add(rid);
+        }
+        count++;
+      } catch {
+        // ignore
+      }
+    }
+    return count;
+  } catch {
+    return 0;
   }
 }
 
@@ -149,7 +197,10 @@ export async function getSessions(projectId: string): Promise<Session[]> {
       const jsonlPath = path.join(projectPath, entry.name);
       const sessionId = entry.name.replace(/\.jsonl$/, '');
       const sessionDir = path.join(projectPath, sessionId);
-      const subagents = await readSubagents(sessionDir);
+      const [subagents, requestCount] = await Promise.all([
+        readSubagents(sessionDir),
+        countRequests(jsonlPath),
+      ]);
       const indexEntry = indexById.get(sessionId);
 
       let firstMessage = '';
@@ -179,6 +230,7 @@ export async function getSessions(projectId: string): Promise<Session[]> {
         jsonl_path: jsonlPath,
         timestamp,
         first_message: firstMessage,
+        request_count: requestCount,
         subagents,
         team_sessions: [] as TeamSession[],
       } satisfies Session;
