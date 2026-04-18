@@ -17,6 +17,9 @@ import {
   InputAdornment,
   List,
   ListItemButton,
+  Menu,
+  MenuItem,
+  Pagination,
   Stack,
   Tab,
   Tabs,
@@ -29,17 +32,17 @@ import React, {
   useMemo,
   useState,
 } from 'react';
+import { useUrlParam } from '../lib/use-url-state';
 import type { LoadedSessionDocument } from '../lib/session-document';
 
 import {
-  collectSessionDocumentFilePaths,
   loadSessionDocument,
   resolveSessionDocumentPlan,
   resolveSessionDocumentSectionLabel,
   sessionDisplayLabel,
 } from '../lib/session-document';
 import { fetchProjects, fetchSessions } from '../lib/api';
-import { fmtTokens, formatModelName } from '../lib/analysis-format';
+import { fmtTokens, modelColor } from '../lib/analysis-format';
 import { downloadSessionExportHtmlClient } from '../lib/session-export';
 import { SessionDocument } from './SessionDocument';
 
@@ -99,20 +102,31 @@ function HighlightedText({ text, query, sx }: { text: string; query: string; sx?
   );
 }
 
+const SESSION_PAGE_SIZE = 20;
+
 export function App() {
   const [selectedSectionTab, setSelectedSectionTab] = useState(0);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [selectedSessionFile, setSelectedSessionFile] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useUrlParam('project');
+  const [selectedSessionId, setSelectedSessionId] = useUrlParam('session');
+  const [projectSearch, setProjectSearch] = useUrlParam('pq');
   const [showEmptyProjects, setShowEmptyProjects] = useState(false);
-  const [showEmptySessions, setShowEmptySessions] = useState(false);
+  const [minReqStr, setMinReqStr] = useUrlParam('min_req');
+  const minRequestThreshold = Math.max(0, parseInt(minReqStr || '5', 10) || 0);
   const [isExportingHtml, setIsExportingHtml] = useState(false);
-  const [projectSearch, setProjectSearch] = useState('');
+  const [sectionMenuAnchor, setSectionMenuAnchor] = useState<HTMLElement | null>(null);
   const [sessionSearch, setSessionSearch] = useState('');
+  const [sessionPage, setSessionPage] = useState(0);
+
+  const resolvedProjectId = selectedProjectId || null;
 
   const projectsQuery = useQuery({
     queryKey: ['projects'],
     queryFn: fetchProjects,
   });
+
+  useEffect(() => {
+    setSessionPage(0);
+  }, [resolvedProjectId, sessionSearch]);
 
   const projects = projectsQuery.data ?? [];
 
@@ -140,56 +154,64 @@ export function App() {
   );
 
   useEffect(() => {
-    if (!selectedProjectId && visibleProjects.length > 0) {
+    if (!resolvedProjectId && visibleProjects.length > 0) {
       setSelectedProjectId(visibleProjects[0].id);
     }
-  }, [selectedProjectId, visibleProjects]);
+  }, [resolvedProjectId, visibleProjects]);
 
   const sessionsQuery = useQuery({
-    queryKey: ['sessions', selectedProjectId],
-    queryFn: () => fetchSessions(selectedProjectId ?? ''),
-    enabled: selectedProjectId !== null,
+    queryKey: ['sessions', resolvedProjectId],
+    queryFn: () => fetchSessions(resolvedProjectId ?? ''),
+    enabled: resolvedProjectId !== null,
   });
 
   const sessions = sessionsQuery.data ?? [];
 
   const visibleSessions = useMemo(() => {
-    const base = showEmptySessions ? sessions : sessions.filter((session) => session.first_message);
+    let base = sessions as typeof sessions;
+    if (minRequestThreshold > 0) {
+      base = base.filter((session) => session.request_count >= minRequestThreshold);
+    }
     if (!sessionSearch) return base;
     const q = normalizeKana(sessionSearch.toLowerCase());
     return base.filter((session) =>
       normalizeKana(session.first_message?.toLowerCase() ?? '').includes(q),
     );
-  }, [sessions, showEmptySessions, sessionSearch]);
+  }, [sessions, minRequestThreshold, sessionSearch]);
 
-  const hiddenSessionCount = useMemo(
-    () => sessions.filter((session) => !session.first_message).length,
-    [sessions],
+  const paginatedSessions = useMemo(
+    () => visibleSessions.slice(sessionPage * SESSION_PAGE_SIZE, (sessionPage + 1) * SESSION_PAGE_SIZE),
+    [visibleSessions, sessionPage],
   );
+
+
 
   useEffect(() => {
     if (!sessions.length) {
-      setSelectedSessionFile(null);
+      setSelectedSessionId(null);
       return;
     }
-
-    const allSessionFiles = collectSessionDocumentFilePaths(sessions);
-    if (!selectedSessionFile || !allSessionFiles.has(selectedSessionFile)) {
-      setSelectedSessionFile(sessions[0].jsonl_path);
+    if (!selectedSessionId || !sessions.some((s) => s.session_id === selectedSessionId)) {
+      setSelectedSessionId(sessions[0].session_id);
     }
-  }, [selectedSessionFile, sessions]);
+  }, [selectedSessionId, sessions]);
+
+  const selectedSessionFile = useMemo(() => {
+    if (!selectedSessionId || !sessions.length) return null;
+    const found = sessions.find((s) => s.session_id === selectedSessionId);
+    return found?.jsonl_path ?? null;
+  }, [selectedSessionId, sessions]);
 
   const selectedProject = useMemo(() => {
-    if (!selectedProjectId) return null;
-    // Check base projects first, then worktrees
-    const base = projects.find((project) => project.id === selectedProjectId);
+    if (!resolvedProjectId) return null;
+    const base = projects.find((project) => project.id === resolvedProjectId);
     if (base) return base;
     for (const project of projects) {
-      const wt = project.worktrees.find((w) => w.id === selectedProjectId);
+      const wt = project.worktrees.find((w) => w.id === resolvedProjectId);
       if (wt) return { ...wt, worktrees: [] as typeof project.worktrees };
     }
     return null;
-  }, [projects, selectedProjectId]);
+  }, [projects, resolvedProjectId]);
 
   const selectedDocumentPlan = useMemo(
     () =>
@@ -243,11 +265,6 @@ export function App() {
 
   const rightPaneTitle =
     documentQuery.data?.title ?? selectedDocumentPlan?.title ?? selectedSessionLabel ?? 'Document';
-  const rightPaneSubtitle = documentQuery.data
-    ? documentQuery.data.sections.length > 1
-      ? `${documentQuery.data.sections.length} sections`
-      : null
-    : null;
 
   return (
     <Box
@@ -339,9 +356,7 @@ export function App() {
                       <Box key={project.id}>
                         <ListItemButton
                           selected={isSelected}
-                          onClick={() => {
-                            setSelectedProjectId(project.id);
-                          }}
+                          onClick={() => setSelectedProjectId(project.id)}
                           sx={{
                             py: 1,
                             px: 2,
@@ -458,15 +473,26 @@ export function App() {
                 ? `${selectedProject.display_name} (${selectedProject.session_count})`
                 : 'Sessions'}
             </Typography>
-            {hiddenSessionCount > 0 && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
               <Button
                 size="small"
-                onClick={() => setShowEmptySessions((value) => !value)}
-                sx={{ fontSize: 11, py: 0, minWidth: 0, color: 'primary.main' }}
+                onClick={() => setMinReqStr(String(Math.max(0, minRequestThreshold - 1)))}
+                disabled={minRequestThreshold <= 0}
+                sx={{ minWidth: 22, px: 0, py: 0, height: 22, fontSize: 14, lineHeight: 1, borderRadius: 0 }}
               >
-                {showEmptySessions ? '空を非表示' : '空を表示'}
+                −
               </Button>
-            )}
+              <Typography sx={{ fontSize: 11, color: 'text.secondary', minWidth: 28, textAlign: 'center', userSelect: 'none' }}>
+                {minRequestThreshold}
+              </Typography>
+              <Button
+                size="small"
+                onClick={() => setMinReqStr(String(minRequestThreshold + 1))}
+                sx={{ minWidth: 22, px: 0, py: 0, height: 22, fontSize: 14, lineHeight: 1, borderRadius: 0 }}
+              >
+                +
+              </Button>
+            </Box>
           </Box>
           <Box sx={{ px: 1.5, py: 0.75, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
             <TextField
@@ -499,13 +525,11 @@ export function App() {
               </Alert>
             ) : (
               <List dense disablePadding>
-                {visibleSessions.map((session) => (
+                {paginatedSessions.map((session) => (
                   <ListItemButton
                     key={session.session_id}
-                    selected={session.jsonl_path === selectedSessionFile}
-                    onClick={() => {
-                      setSelectedSessionFile(session.jsonl_path);
-                    }}
+                    selected={session.session_id === selectedSessionId}
+                    onClick={() => setSelectedSessionId(session.session_id)}
                     sx={{
                       py: 1,
                       px: 2,
@@ -564,6 +588,17 @@ export function App() {
               </List>
             )}
           </Box>
+          {visibleSessions.length > SESSION_PAGE_SIZE && (
+            <Box sx={{ px: 1, py: 0.75, borderTop: 1, borderColor: 'divider', flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
+              <Pagination
+                count={Math.ceil(visibleSessions.length / SESSION_PAGE_SIZE)}
+                page={sessionPage + 1}
+                onChange={(_, page) => setSessionPage(page - 1)}
+                size="small"
+                siblingCount={0}
+              />
+            </Box>
+          )}
         </Box>
 
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -589,11 +624,6 @@ export function App() {
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography sx={{ fontSize: 14, fontWeight: 600 }}>{rightPaneTitle}</Typography>
-                    {rightPaneSubtitle && (
-                      <Typography color="text.secondary" sx={{ fontSize: 12 }}>
-                        {rightPaneSubtitle}
-                      </Typography>
-                    )}
                   </Box>
                   <Button
                     size="small"
@@ -610,52 +640,123 @@ export function App() {
               </Box>
 
               {documentQuery.data.sections.length > 1 && (
-                <Box sx={{ borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
+                <Box sx={{ borderBottom: 1, borderColor: 'divider', flexShrink: 0, display: 'flex', alignItems: 'stretch' }}>
                   <Tabs
                     value={selectedSectionTab}
                     onChange={(_, value: number) => setSelectedSectionTab(value)}
-                    sx={{ minHeight: 36 }}
+                    sx={{ minHeight: 36, flex: 1, minWidth: 0 }}
                     variant="scrollable"
                     scrollButtons="auto"
                   >
                     {documentQuery.data.sections.map((section, index) => {
                       const total = section.analysis.total;
                       const totalTokens =
-                        total.input_tokens +
-                        total.output_tokens +
-                        total.cache_read_tokens +
-                        total.cache_creation_5m +
-                        total.cache_creation_1h;
-                      const models = Object.keys(section.analysis.by_model)
-                        .map(formatModelName)
-                        .join(' / ');
+                        total.latest_total_input_tokens +
+                        total.latest_output_tokens;
+                      const modelKeys = Object.keys(section.analysis.by_model);
 
                       return (
                         <Tab
                           key={section.filePath}
                           label={
-                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0 }}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0, maxWidth: 160, minWidth: 0 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', minWidth: 0 }}>
                                 {section.kind === 'team' ? (
-                                  <GroupsIcon sx={{ fontSize: 13 }} />
+                                  <GroupsIcon sx={{ fontSize: 13, flexShrink: 0 }} />
                                 ) : section.kind === 'subagent' ? (
-                                  <SmartToyIcon sx={{ fontSize: 13 }} />
+                                  <SmartToyIcon sx={{ fontSize: 13, flexShrink: 0 }} />
                                 ) : null}
-                                <span>{section.title}</span>
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{section.title}</span>
                               </Box>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, color: 'text.disabled', fontSize: 10, lineHeight: 1.4 }}>
-                                {models && <span>{models}</span>}
-                                {models && totalTokens > 0 && <span>·</span>}
-                                {totalTokens > 0 && <span>{fmtTokens(totalTokens)}</span>}
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, lineHeight: 1.4 }}>
+                                {modelKeys.map((m) => (
+                                  <span key={m} style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: modelColor(m), display: 'inline-block', flexShrink: 0 }} />
+                                ))}
+                                {section.kind !== 'session' && section.subtitle && (
+                                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.38)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{section.subtitle}</span>
+                                )}
+                                {totalTokens > 0 && (
+                                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.38)', flexShrink: 0 }}>{fmtTokens(totalTokens)}</span>
+                                )}
                               </Box>
                             </Box>
                           }
                           value={index}
-                          sx={{ minHeight: 44, py: 0.5, fontSize: 12, alignItems: 'flex-start' }}
+                          sx={{ minHeight: 44, py: 0.5, fontSize: 12, alignItems: 'flex-start', maxWidth: 180 }}
                         />
                       );
                     })}
                   </Tabs>
+                  <Button
+                    size="small"
+                    onClick={(e) => setSectionMenuAnchor(e.currentTarget)}
+                    sx={{
+                      flexShrink: 0,
+                      px: 1,
+                      minWidth: 36,
+                      borderLeft: 1,
+                      borderColor: 'divider',
+                      borderRadius: 0,
+                      fontSize: 11,
+                      color: 'text.secondary',
+                    }}
+                  >
+                    ▼
+                  </Button>
+                  <Menu
+                    anchorEl={sectionMenuAnchor}
+                    open={Boolean(sectionMenuAnchor)}
+                    onClose={() => setSectionMenuAnchor(null)}
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                    transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                  >
+                    {documentQuery.data.sections.map((section, index) => {
+                      const total = section.analysis.total;
+                      const totalTokens =
+                        total.latest_total_input_tokens +
+                        total.latest_output_tokens;
+                      const modelKeys = Object.keys(section.analysis.by_model);
+                      return (
+                        <MenuItem
+                          key={section.filePath}
+                          selected={index === selectedSectionTab}
+                          onClick={() => {
+                            setSelectedSectionTab(index);
+                            setSectionMenuAnchor(null);
+                          }}
+                          sx={{ fontSize: 12, gap: 1, minWidth: 220 }}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flex: 1, minWidth: 0 }}>
+                            {section.kind === 'team' ? (
+                              <GroupsIcon sx={{ fontSize: 14, flexShrink: 0, color: 'text.secondary' }} />
+                            ) : section.kind === 'subagent' ? (
+                              <SmartToyIcon sx={{ fontSize: 14, flexShrink: 0, color: 'text.secondary' }} />
+                            ) : null}
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Typography sx={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {section.title}
+                              </Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+                                {modelKeys.map((m) => (
+                                  <span key={m} style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: modelColor(m), display: 'inline-block', flexShrink: 0 }} />
+                                ))}
+                                {section.kind !== 'session' && section.subtitle && (
+                                  <Typography sx={{ fontSize: 10, color: 'text.disabled', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {section.subtitle}
+                                  </Typography>
+                                )}
+                                {totalTokens > 0 && (
+                                  <Typography sx={{ fontSize: 10, color: 'text.disabled', flexShrink: 0 }}>
+                                    · {fmtTokens(totalTokens)}
+                                  </Typography>
+                                )}
+                              </Box>
+                            </Box>
+                          </Box>
+                        </MenuItem>
+                      );
+                    })}
+                  </Menu>
                 </Box>
               )}
 
