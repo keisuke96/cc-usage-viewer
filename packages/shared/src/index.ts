@@ -42,6 +42,7 @@ export const sessionSchema = z.object({
   jsonl_path: z.string(),
   timestamp: z.string().nullable(),
   first_message: z.string(),
+  request_count: z.number().int().nonnegative(),
   subagents: z.array(subagentSchema),
   team_sessions: z.array(teamSessionSchema),
 });

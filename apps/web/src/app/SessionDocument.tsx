@@ -951,7 +951,8 @@ export function buildTimelineOption(
         stack: 'total',
         data: points.map((point) => point.cache_read_tokens),
         itemStyle: { color: SERIES_COLORS.cacheRead },
-        barMaxWidth: 20,
+        barMaxWidth: 10,
+        barCategoryGap: '5%',
       },
       {
         name: 'Cache Write',
@@ -959,7 +960,7 @@ export function buildTimelineOption(
         stack: 'total',
         data: points.map((point) => point.cache_write_tokens),
         itemStyle: { color: SERIES_COLORS.cacheWrite },
-        barMaxWidth: 20,
+        barMaxWidth: 10,
       },
       {
         name: 'Input',
@@ -967,7 +968,7 @@ export function buildTimelineOption(
         stack: 'total',
         data: points.map((point) => point.input_tokens),
         itemStyle: { color: SERIES_COLORS.input },
-        barMaxWidth: 20,
+        barMaxWidth: 10,
       },
       {
         name: 'Output',
@@ -975,7 +976,7 @@ export function buildTimelineOption(
         stack: 'total',
         data: points.map((point) => point.output_tokens),
         itemStyle: { color: SERIES_COLORS.output },
-        barMaxWidth: 20,
+        barMaxWidth: 10,
       },
     ],
   };
@@ -1021,7 +1022,7 @@ function UsageTimelineChart({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
-  const chartWidth = Math.max(points.length * 36, 560);
+  const chartWidth = Math.max(points.length * 20, 480);
   const chartHeight = 260;
 
   useEffect(() => {
@@ -1131,6 +1132,9 @@ function AnalysisSummary({
   className?: string;
   dataFilePath?: string;
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const isInteractive = mode === 'interactive';
+
   const total = analysis.total;
   const byModel = analysis.by_model;
   const latestContext =
@@ -1150,12 +1154,23 @@ function AnalysisSummary({
       className={className ? className : 'session-document__analysis'}
       data-session-file-path={dataFilePath}
     >
-      <div className="analysis-summary__header">
+      <div
+        className={`analysis-summary__header${isInteractive ? ' analysis-summary__header--toggle' : ''}`}
+        onClick={isInteractive ? () => setIsOpen((v) => !v) : undefined}
+        role={isInteractive ? 'button' : undefined}
+        tabIndex={isInteractive ? 0 : undefined}
+        onKeyDown={isInteractive ? (e) => { if (e.key === 'Enter' || e.key === ' ') setIsOpen((v) => !v); } : undefined}
+      >
         <h2 className="analysis-summary__title">{title}</h2>
+        {isInteractive && (
+          <span className="analysis-summary__chevron">{isOpen ? '▴' : '▾'}</span>
+        )}
         {subtitle && (
           <div className="analysis-summary__subtitle">{subtitle}</div>
         )}
       </div>
+
+      {/* 常時表示: 主要カード */}
       <div className="summary-grid">
         <SummaryStat
           label="Token Usage"
@@ -1169,67 +1184,9 @@ function AnalysisSummary({
         />
         <SummaryStat label="Requests" value={String(total.requests)} />
         <ModelChips byModel={byModel} />
-        <SummaryStat
-          label="Total Input"
-          value={fmtTokens(totalInput)}
-          sub={`新規 ${fmtTokens(total.input_tokens)}`}
-        />
-        <SummaryStat label="Output" value={fmtTokens(total.output_tokens)} />
-        <SummaryStat
-          label="Cache Hit"
-          value={fmtTokens(total.cache_read_tokens)}
-          sub={fmtPct(total.cache_hit_rate)}
-        />
-        <SummaryStat
-          label="Cache Write"
-          value={fmtTokens(total.cache_creation_5m + total.cache_creation_1h)}
-        />
-      </div>
-      <div className="analysis-summary__note">
-        Token Usage = 最新リクエスト 1 件の総入力 + 総出力。Total Output と
-        Cache 系はセッション累計です。
       </div>
 
-      {modelEntries.length > 0 && (
-        <div className="analysis-block">
-          <h3>モデル別</h3>
-          <div className="table-wrap">
-            <table className="analysis-table">
-              <thead>
-                <tr>
-                  <th>Model</th>
-                  <th>Req</th>
-                  <th>Input</th>
-                  <th>Cache Hit</th>
-                  <th>Cache Write</th>
-                  <th>Output</th>
-                  <th>Hit Rate</th>
-                  <th>Cost (est.)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {modelEntries.map(([model, stats]) => (
-                  <tr key={model}>
-                    <td>{model}</td>
-                    <td>{stats.requests}</td>
-                    <td>{fmtTokens(stats.input_tokens)}</td>
-                    <td>{fmtTokens(stats.cache_read_tokens)}</td>
-                    <td>
-                      {fmtTokens(
-                        stats.cache_creation_5m + stats.cache_creation_1h,
-                      )}
-                    </td>
-                    <td>{fmtTokens(stats.output_tokens)}</td>
-                    <td>{fmtPct(stats.cache_hit_rate)}</td>
-                    <td>{fmtCost(stats.cost_usd)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
+      {/* 常時表示: タイムライン */}
       {analysis.usage_timeline.length > 0 && (
         <div className="analysis-block">
           <h3>
@@ -1239,7 +1196,72 @@ function AnalysisSummary({
         </div>
       )}
 
-      <ToolStatsSection toolStats={toolStats} />
+      {/* 展開時のみ: 詳細カード・テーブル・ツール統計 */}
+      {(!isInteractive || isOpen) && (
+        <>
+          <div className="summary-grid" style={{ marginTop: 12 }}>
+            <SummaryStat
+              label="Total Input"
+              value={fmtTokens(totalInput)}
+            />
+            <SummaryStat label="Output" value={fmtTokens(total.output_tokens)} />
+            <SummaryStat
+              label="Cache Hit"
+              value={fmtTokens(total.cache_read_tokens)}
+            />
+            <SummaryStat
+              label="Cache Write"
+              value={fmtTokens(total.cache_creation_5m + total.cache_creation_1h)}
+            />
+          </div>
+          <div className="analysis-summary__note">
+            Token Usage = 最新リクエスト 1 件の総入力 + 総出力。Total Output と
+            Cache 系はセッション累計です。
+          </div>
+
+          {modelEntries.length > 0 && (
+            <div className="analysis-block">
+              <h3>モデル別</h3>
+              <div className="table-wrap">
+                <table className="analysis-table">
+                  <thead>
+                    <tr>
+                      <th>Model</th>
+                      <th>Req</th>
+                      <th>Input</th>
+                      <th>Cache Hit</th>
+                      <th>Cache Write</th>
+                      <th>Output</th>
+                      <th>Hit Rate</th>
+                      <th>Cost (est.)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {modelEntries.map(([model, stats]) => (
+                      <tr key={model}>
+                        <td>{model}</td>
+                        <td>{stats.requests}</td>
+                        <td>{fmtTokens(stats.input_tokens)}</td>
+                        <td>{fmtTokens(stats.cache_read_tokens)}</td>
+                        <td>
+                          {fmtTokens(
+                            stats.cache_creation_5m + stats.cache_creation_1h,
+                          )}
+                        </td>
+                        <td>{fmtTokens(stats.output_tokens)}</td>
+                        <td>{fmtPct(stats.cache_hit_rate)}</td>
+                        <td>{fmtCost(stats.cost_usd)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <ToolStatsSection toolStats={toolStats} />
+        </>
+      )}
     </section>
   );
 }
@@ -1327,6 +1349,7 @@ function SearchToolbar({
   onPrevious,
   onNext,
   onClear,
+  onScrollTop,
 }: {
   query: string;
   matchCount: number;
@@ -1338,7 +1361,9 @@ function SearchToolbar({
   onPrevious: () => void;
   onNext: () => void;
   onClear: () => void;
+  onScrollTop: () => void;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const hasQuery = query.trim().length > 0;
   const hasMatches = matchCount > 0;
   const isCompact = !hasQuery && !isFocused;
@@ -1348,76 +1373,109 @@ function SearchToolbar({
       : '0 件'
     : '未検索';
 
+  function handleIconClick() {
+    onFocus();
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
   return (
     <div
       className={['session-search', isCompact ? 'session-search--compact' : '']
         .filter(Boolean)
         .join(' ')}
     >
-      <div className="session-search__row">
-        <input
-          type="search"
-          className="session-search__input"
-          value={query}
-          placeholder="チャット内を検索"
-          onFocus={onFocus}
-          onBlur={onBlur}
-          onChange={(event) => {
-            onQueryChange(event.target.value);
-          }}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter') {
-              return;
-            }
-
-            event.preventDefault();
-            if (event.shiftKey) {
-              onPrevious();
-              return;
-            }
-
-            onNext();
-          }}
-        />
-        {!isCompact && (
-          <>
-            <div className="session-search__meta">{resultLabel}</div>
-            <button
-              type="button"
-              className="session-search__button"
-              onMouseDown={(event) => {
-                event.preventDefault();
-              }}
-              onClick={onPrevious}
-              disabled={!hasMatches}
-            >
-              前へ
-            </button>
-            <button
-              type="button"
-              className="session-search__button"
-              onMouseDown={(event) => {
-                event.preventDefault();
-              }}
-              onClick={onNext}
-              disabled={!hasMatches}
-            >
-              次へ
-            </button>
-            <button
-              type="button"
-              className="session-search__button session-search__button--ghost"
-              onMouseDown={(event) => {
-                event.preventDefault();
-              }}
-              onClick={onClear}
-              disabled={!hasQuery}
-            >
-              クリア
-            </button>
-          </>
-        )}
-      </div>
+      {isCompact ? (
+        <>
+          <button
+            type="button"
+            className="session-search__icon-btn"
+            onClick={handleIconClick}
+            aria-label="チャット内を検索"
+          >
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="11" cy="11" r="7" />
+              <line x1="16.5" y1="16.5" x2="22" y2="22" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className="session-search__icon-btn"
+            onClick={onScrollTop}
+            aria-label="一番上へ"
+          >
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="12" y1="19" x2="12" y2="5" />
+              <polyline points="5 12 12 5 19 12" />
+            </svg>
+          </button>
+        </>
+      ) : (
+        <div className="session-search__row">
+          <input
+            ref={inputRef}
+            type="search"
+            className="session-search__input"
+            value={query}
+            placeholder="チャット内を検索"
+            onFocus={onFocus}
+            onBlur={onBlur}
+            onChange={(event) => {
+              onQueryChange(event.target.value);
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') {
+                return;
+              }
+              event.preventDefault();
+              if (event.shiftKey) {
+                onPrevious();
+                return;
+              }
+              onNext();
+            }}
+          />
+          <div className="session-search__meta">{resultLabel}</div>
+          <button
+            type="button"
+            className="session-search__button"
+            onMouseDown={(event) => { event.preventDefault(); }}
+            onClick={onPrevious}
+            disabled={!hasMatches}
+          >
+            前へ
+          </button>
+          <button
+            type="button"
+            className="session-search__button"
+            onMouseDown={(event) => { event.preventDefault(); }}
+            onClick={onNext}
+            disabled={!hasMatches}
+          >
+            次へ
+          </button>
+          <button
+            type="button"
+            className="session-search__button session-search__button--ghost"
+            onMouseDown={(event) => { event.preventDefault(); }}
+            onClick={onClear}
+            disabled={!hasQuery}
+          >
+            クリア
+          </button>
+          <button
+            type="button"
+            className="session-search__icon-btn"
+            onMouseDown={(event) => { event.preventDefault(); }}
+            onClick={onScrollTop}
+            aria-label="一番上へ"
+          >
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="12" y1="19" x2="12" y2="5" />
+              <polyline points="5 12 12 5 19 12" />
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1564,35 +1622,6 @@ export function SessionDocument({
         </header>
       )}
 
-      {mode === 'interactive' && showMessages && (
-        <SearchToolbar
-          query={searchQuery}
-          matchCount={matchedSearchEntries.length}
-          activeIndex={activeSearchIndex}
-          isFocused={isSearchFocused}
-          onQueryChange={(value) => {
-            setSearchQuery(value);
-            setActiveSearchIndex(0);
-          }}
-          onFocus={() => {
-            setIsSearchFocused(true);
-          }}
-          onBlur={() => {
-            setIsSearchFocused(false);
-          }}
-          onPrevious={() => {
-            moveSearchIndex(-1);
-          }}
-          onNext={() => {
-            moveSearchIndex(1);
-          }}
-          onClear={() => {
-            setSearchQuery('');
-            setActiveSearchIndex(0);
-          }}
-        />
-      )}
-
       {document.sections.map((section) => {
         const sectionClassName = [
           'session-section',
@@ -1650,6 +1679,30 @@ export function SessionDocument({
           </div>
         );
       })}
+
+      {mode === 'interactive' && showMessages && (
+        <SearchToolbar
+          query={searchQuery}
+          matchCount={matchedSearchEntries.length}
+          activeIndex={activeSearchIndex}
+          isFocused={isSearchFocused}
+          onQueryChange={(value) => {
+            setSearchQuery(value);
+            setActiveSearchIndex(0);
+          }}
+          onFocus={() => setIsSearchFocused(true)}
+          onBlur={() => setIsSearchFocused(false)}
+          onPrevious={() => moveSearchIndex(-1)}
+          onNext={() => moveSearchIndex(1)}
+          onClear={() => {
+            setSearchQuery('');
+            setActiveSearchIndex(0);
+          }}
+          onScrollTop={() => {
+            rootRef.current?.parentElement?.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        />
+      )}
     </div>
   );
 }
