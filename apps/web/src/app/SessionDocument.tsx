@@ -105,6 +105,8 @@ function renderTimestamp(timestamp: string | null): string {
 function renderContentBody(item: ChatContentItem): string {
   if (item.type === 'tool_use') return JSON.stringify(item.input, null, 2);
   if (item.type === 'tool_result') return item.content;
+  if (item.type === 'advisor_call') return '[Advisor 呼び出し]';
+  if (item.type === 'advisor_result') return item.text ?? '[暗号化されたレスポンス]';
   return item.text;
 }
 
@@ -600,6 +602,43 @@ function ToolResultBlock({
   );
 }
 
+function AdvisorCallBlock() {
+  return (
+    <div className="advisor-call-block">
+      <span className="advisor-badge">Advisor</span>
+      <span className="advisor-call-label">レビューを依頼</span>
+    </div>
+  );
+}
+
+function AdvisorResultBlock({ item, mode }: { item: Extract<ChatContentItem, { type: 'advisor_result' }>; mode: SessionDocumentMode }) {
+  if (item.text === null) {
+    return (
+      <div className="advisor-result-block advisor-result-block--redacted">
+        <span className="advisor-badge">Advisor</span>
+        <span className="advisor-result-redacted">暗号化されたレスポンス</span>
+      </div>
+    );
+  }
+
+  return (
+    <details className="advisor-result-block" open>
+      <summary>
+        <span className="advisor-badge">Advisor</span>
+        <span className="advisor-result-preview">{item.text.slice(0, 80).replaceAll('\n', ' ')}</span>
+        {mode === 'interactive' && (
+          <span className="tool-summary__actions">
+            <CopyButton text={item.text} label="レスポンスをコピー" />
+          </span>
+        )}
+      </summary>
+      <div className="advisor-result-body">
+        <MarkdownContent text={item.text} variant="default" />
+      </div>
+    </details>
+  );
+}
+
 function MessageContentItem({
   item,
   mode,
@@ -610,6 +649,8 @@ function MessageContentItem({
   if (item.type === 'tool_use') return <ToolUseBlock item={item} mode={mode} />;
   if (item.type === 'tool_result')
     return <ToolResultBlock item={item} mode={mode} />;
+  if (item.type === 'advisor_call') return <AdvisorCallBlock />;
+  if (item.type === 'advisor_result') return <AdvisorResultBlock item={item} mode={mode} />;
 
   const isThinking = item.type === 'thinking';
   const className = [
@@ -846,6 +887,10 @@ const SERIES_COLORS = {
   cacheRead: '#70ad47',
   cacheWrite: '#ed7d31',
   output: '#5b9bd5',
+  advisorCacheRead: '#9c4dcc',
+  advisorCacheWrite: '#b06fe0',
+  advisorInput: '#ce93d8',
+  advisorOutput: '#f48fb1',
 };
 
 function buildTimelineLabels(points: UsageTimelinePoint[]): string[] {
@@ -892,9 +937,10 @@ export function buildTimelineOption(
 
         const idx = items[0].dataIndex;
         const point = points[idx];
+        const advisorTotal = (point.advisor_input_tokens ?? 0) + (point.advisor_cache_read_tokens ?? 0) + (point.advisor_cache_write_tokens ?? 0) + (point.advisor_output_tokens ?? 0);
         const lines = [
           `<b>${xLabels[idx]}</b>`,
-          `Total: ${fmtTokens(point.token_usage)}`,
+          `Total: ${fmtTokens(point.token_usage + advisorTotal)}`,
           ...items.map(
             (item) =>
               `${item.marker}${item.seriesName}: ${fmtTokens(item.value)}`,
@@ -911,7 +957,7 @@ export function buildTimelineOption(
       },
     },
     legend: {
-      data: ['Cache Hit', 'Cache Write', 'Input', 'Output'],
+      data: ['Cache Hit', 'Cache Write', 'Input', 'Output', 'Adv Cache Hit', 'Adv Cache Write', 'Adv Input', 'Adv Output'],
       bottom: 0,
       textStyle: {
         color: 'rgba(255,255,255,0.72)',
@@ -976,6 +1022,38 @@ export function buildTimelineOption(
         stack: 'total',
         data: points.map((point) => point.output_tokens),
         itemStyle: { color: SERIES_COLORS.output },
+        barMaxWidth: 10,
+      },
+      {
+        name: 'Adv Cache Hit',
+        type: 'bar',
+        stack: 'total',
+        data: points.map((point) => point.advisor_cache_read_tokens ?? 0),
+        itemStyle: { color: SERIES_COLORS.advisorCacheRead },
+        barMaxWidth: 10,
+      },
+      {
+        name: 'Adv Cache Write',
+        type: 'bar',
+        stack: 'total',
+        data: points.map((point) => point.advisor_cache_write_tokens ?? 0),
+        itemStyle: { color: SERIES_COLORS.advisorCacheWrite },
+        barMaxWidth: 10,
+      },
+      {
+        name: 'Adv Input',
+        type: 'bar',
+        stack: 'total',
+        data: points.map((point) => point.advisor_input_tokens ?? 0),
+        itemStyle: { color: SERIES_COLORS.advisorInput },
+        barMaxWidth: 10,
+      },
+      {
+        name: 'Adv Output',
+        type: 'bar',
+        stack: 'total',
+        data: points.map((point) => point.advisor_output_tokens ?? 0),
+        itemStyle: { color: SERIES_COLORS.advisorOutput },
         barMaxWidth: 10,
       },
     ],

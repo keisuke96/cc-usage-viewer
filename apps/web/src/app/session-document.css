@@ -797,6 +797,85 @@
   color: #ff8a80;
 }
 
+.advisor-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  height: 20px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  background: rgba(60, 30, 100, 0.85);
+  color: #ce93d8;
+}
+
+.advisor-call-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid rgba(206, 147, 216, 0.2);
+  border-radius: 12px;
+  background: rgba(60, 30, 100, 0.12);
+}
+
+.advisor-call-label {
+  font-size: 12px;
+  color: var(--session-text-2);
+}
+
+.advisor-result-block {
+  border: 1px solid rgba(206, 147, 216, 0.25);
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(60, 30, 100, 0.1);
+}
+
+.advisor-result-block > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.advisor-result-block > summary::-webkit-details-marker {
+  display: none;
+}
+
+.advisor-result-block--redacted {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: default;
+}
+
+.advisor-result-preview {
+  flex: 1;
+  min-width: 0;
+  color: var(--session-text-2);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.advisor-result-redacted {
+  font-size: 12px;
+  color: var(--session-text-3);
+  font-style: italic;
+}
+
+.advisor-result-body {
+  border-top: 1px solid rgba(206, 147, 216, 0.2);
+  padding: 12px 14px 14px;
+}
+
 .tool-preview,
 .result-preview {
   flex: 1;

@@ -22,7 +22,12 @@ export function fmtPct(n: number): string {
   return `${n.toFixed(1)}%`;
 }
 
+export function isAdvisorModelKey(name: string): boolean {
+  return name.startsWith('advisor:');
+}
+
 export function modelColor(name: string): string {
+  if (isAdvisorModelKey(name)) return '#ce93d8';
   const lower = name.toLowerCase();
   if (lower.includes('opus')) return '#a78bfa';
   if (lower.includes('sonnet')) return '#60a5fa';
@@ -31,6 +36,15 @@ export function modelColor(name: string): string {
 }
 
 export function formatModelName(name: string): string {
+  if (isAdvisorModelKey(name)) {
+    const inner = name.slice('advisor:'.length);
+    const m = inner.match(/(?:claude-)?(opus|sonnet|haiku)-(\d+)-(\d+)/i);
+    if (m) {
+      const model = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
+      return `Advisor (${model} ${m[2]}.${m[3]})`;
+    }
+    return `Advisor (${inner})`;
+  }
   const m = name.match(/(?:claude-)?(opus|sonnet|haiku)-(\d+)-(\d+)/i);
   if (m) {
     const model = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();

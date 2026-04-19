@@ -61,6 +61,20 @@ function parseContentItem(contentItem: JsonRecord): ChatContentItem | null {
     };
   }
 
+  if (contentType === 'server_tool_use' && contentItem.name === 'advisor') {
+    return { type: 'advisor_call' };
+  }
+
+  if (contentType === 'advisor_tool_result') {
+    const inner = asRecord(contentItem.content);
+    const innerType = typeof inner?.type === 'string' ? inner.type : '';
+    const text =
+      innerType === 'advisor_result' && typeof inner?.text === 'string'
+        ? inner.text
+        : null;
+    return { type: 'advisor_result', text };
+  }
+
   return null;
 }
 

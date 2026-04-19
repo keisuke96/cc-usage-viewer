@@ -72,11 +72,22 @@ export const chatToolResultItemSchema = z.object({
   is_error: z.boolean(),
 });
 
+export const chatAdvisorCallItemSchema = z.object({
+  type: z.literal('advisor_call'),
+});
+
+export const chatAdvisorResultItemSchema = z.object({
+  type: z.literal('advisor_result'),
+  text: z.string().nullable(),
+});
+
 export const chatContentItemSchema = z.discriminatedUnion('type', [
   chatTextItemSchema,
   chatThinkingItemSchema,
   chatToolUseItemSchema,
   chatToolResultItemSchema,
+  chatAdvisorCallItemSchema,
+  chatAdvisorResultItemSchema,
 ]);
 
 export const chatMessageSchema = z.object({
@@ -126,6 +137,10 @@ export const usageTimelinePointSchema = z.object({
   token_usage: z.number(),
   content_types: z.array(z.string()),
   user_summary: z.string(),
+  advisor_input_tokens: z.number().default(0),
+  advisor_cache_read_tokens: z.number().default(0),
+  advisor_cache_write_tokens: z.number().default(0),
+  advisor_output_tokens: z.number().default(0),
 });
 
 export const toolStatsSchema = z.object({

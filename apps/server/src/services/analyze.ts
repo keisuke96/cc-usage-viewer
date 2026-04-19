@@ -214,6 +214,42 @@ function aggregate(records: Record<string, unknown>[]): AggResult {
     total.cache_read_tokens += cacheRead;
     total.requests += 1;
 
+    // advisorイテレーション（by_modelに別エントリーとして集計）
+    const iterations = Array.isArray(usage.iterations) ? usage.iterations : [];
+    for (const it of iterations) {
+      const itObj = asRecord(it);
+      if (!itObj || asString(itObj.type) !== 'advisor_message') continue;
+      const advisorModel = asString(itObj.model) || 'unknown';
+      const advisorKey = `advisor:${advisorModel}`;
+      const itCc = asRecord(itObj.cache_creation) ?? {};
+      const itInput = asNumber(itObj.input_tokens);
+      const itOutput = asNumber(itObj.output_tokens);
+      const itCacheRead = asNumber(itObj.cache_read_input_tokens);
+      const itCache5m = asNumber(itCc.ephemeral_5m_input_tokens);
+      const itCache1h = asNumber(itCc.ephemeral_1h_input_tokens);
+      const itTotalInput = itInput + itCacheRead + itCache5m + itCache1h;
+
+      let am = byModel.get(advisorKey);
+      if (!am) {
+        am = zeroStats();
+        byModel.set(advisorKey, am);
+      }
+      am.input_tokens += itInput;
+      am.output_tokens += itOutput;
+      am.cache_read_tokens += itCacheRead;
+      am.cache_creation_5m += itCache5m;
+      am.cache_creation_1h += itCache1h;
+      am.requests += 1;
+      am.latest_total_input_tokens = itTotalInput;
+      am.latest_output_tokens = itOutput;
+
+      total.input_tokens += itInput;
+      total.output_tokens += itOutput;
+      total.cache_read_tokens += itCacheRead;
+      total.cache_creation_5m += itCache5m;
+      total.cache_creation_1h += itCache1h;
+    }
+
     if (ts) {
       const prevModelTs = latestByModelTs.get(model);
       if (!prevModelTs || ts >= prevModelTs) {
@@ -507,6 +543,22 @@ async function extractUsageTimeline(
     const totalInput = inputTokens + cacheRead + cacheWrite;
     const ts = asString(obj.timestamp) || null;
 
+    // advisorイテレーション分を抽出
+    const rawIterations = Array.isArray(usage.iterations) ? usage.iterations : [];
+    let advisorInputTokens = 0;
+    let advisorCacheReadTokens = 0;
+    let advisorCacheWriteTokens = 0;
+    let advisorOutputTokens = 0;
+    for (const it of rawIterations) {
+      const itObj = asRecord(it);
+      if (!itObj || asString(itObj.type) !== 'advisor_message') continue;
+      const itCc = asRecord(itObj.cache_creation) ?? {};
+      advisorInputTokens += asNumber(itObj.input_tokens);
+      advisorCacheReadTokens += asNumber(itObj.cache_read_input_tokens);
+      advisorCacheWriteTokens += asNumber(itCc.ephemeral_5m_input_tokens) + asNumber(itCc.ephemeral_1h_input_tokens);
+      advisorOutputTokens += asNumber(itObj.output_tokens);
+    }
+
     const point = {
       uuid: asString(obj.uuid) || null,
       timestamp: ts,
@@ -519,6 +571,10 @@ async function extractUsageTimeline(
       token_usage: totalInput + outputTokens,
       content_types: contentTypesForUsage(msg),
       user_summary: latestUserSummary,
+      advisor_input_tokens: advisorInputTokens,
+      advisor_cache_read_tokens: advisorCacheReadTokens,
+      advisor_cache_write_tokens: advisorCacheWriteTokens,
+      advisor_output_tokens: advisorOutputTokens,
       _seq: seq,
     };
     seq += 1;
