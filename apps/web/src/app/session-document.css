@@ -45,9 +45,9 @@
 }
 
 .session-document--export {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 32px 20px 48px;
+  max-width: none;
+  margin: 0;
+  padding: 0;
 }
 
 
@@ -1207,7 +1207,7 @@
 
 @media (max-width: 800px) {
   .session-document--export {
-    padding: 20px 12px 36px;
+    padding: 0;
   }
 
   .session-search__row {
