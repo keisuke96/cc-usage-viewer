@@ -69,9 +69,7 @@ type SessionDocumentProps = {
   document: LoadedSessionDocument;
   mode: SessionDocumentMode;
   view: SessionDocumentView;
-  projectName?: string;
   selectedFilePath?: string | null;
-  showDocumentHeader?: boolean;
 };
 
 function renderTimestamp(timestamp: string | null): string {
@@ -1556,19 +1554,13 @@ export function SessionDocument({
   document,
   mode,
   view,
-  projectName,
   selectedFilePath,
-  showDocumentHeader = false,
 }: SessionDocumentProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const searchTargetRefs = useRef(new Map<string, HTMLElement>());
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const totalMessages = document.sections.reduce(
-    (sum, section) => sum + section.messages.length,
-    0,
-  );
   const showAnalysis = view === 'analysis' || view === 'both';
   const showMessages = view === 'messages' || view === 'both';
   const searchableMessages = useMemo(
@@ -1682,18 +1674,6 @@ export function SessionDocument({
 
   return (
     <div ref={rootRef} className={rootClassName}>
-      {showDocumentHeader && (
-        <header className="session-document__header">
-          <h1>{document.title}</h1>
-          <div className="session-document__meta">
-            {projectName && <span>{projectName}</span>}
-            <span>{document.sections.length} sections</span>
-            <span>{totalMessages} messages</span>
-            <span>exported {new Date().toISOString()}</span>
-          </div>
-        </header>
-      )}
-
       {document.sections.map((section) => {
         const sectionClassName = [
           'session-section',

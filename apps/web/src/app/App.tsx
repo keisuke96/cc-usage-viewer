@@ -1,10 +1,12 @@
-import type { Session } from '@ccuv/shared';
-
 // ひらがな・カタカナを正規化（カタカナ→ひらがな変換）して同一視する
 function normalizeKana(str: string): string {
-  return str.replace(/[\u30A1-\u30F6]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60));
+  return str.replace(/[\u30A1-\u30F6]/g, (ch) =>
+    String.fromCharCode(ch.charCodeAt(0) - 0x60),
+  );
 }
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import GroupsIcon from '@mui/icons-material/Groups';
 import SearchIcon from '@mui/icons-material/Search';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
@@ -14,37 +16,28 @@ import {
   Button,
   Chip,
   CircularProgress,
+  IconButton,
   InputAdornment,
   List,
   ListItemButton,
-  Menu,
-  MenuItem,
   Pagination,
   Stack,
-  Tab,
-  Tabs,
   TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import React, {
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import type { CSSProperties } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useUrlParam } from '../lib/use-url-state';
-import type { LoadedSessionDocument } from '../lib/session-document';
 
 import {
   loadSessionDocument,
   resolveSessionDocumentPlan,
-  resolveSessionDocumentSectionLabel,
   sessionDisplayLabel,
 } from '../lib/session-document';
 import { fetchProjects, fetchSessions } from '../lib/api';
-import { fmtTokens, modelColor } from '../lib/analysis-format';
 import { downloadSessionExportHtmlClient } from '../lib/session-export';
-import { SessionDocument } from './SessionDocument';
+import { SessionPane } from './SessionPane';
 
 function renderTimestamp(timestamp: string | null): string {
   if (!timestamp) {
@@ -74,18 +67,26 @@ function renderTimestamp(timestamp: string | null): string {
   }
 }
 
-function HighlightedText({ text, query, sx }: { text: string; query: string; sx?: object }) {
+function HighlightedText({
+  text,
+  query,
+  sx,
+}: {
+  text: string;
+  query: string;
+  sx?: object;
+}) {
   if (!query) {
-    return <span style={sx as React.CSSProperties}>{text}</span>;
+    return <span style={sx as CSSProperties}>{text}</span>;
   }
 
   const idx = text.toLowerCase().indexOf(query.toLowerCase());
   if (idx === -1) {
-    return <span style={sx as React.CSSProperties}>{text}</span>;
+    return <span style={sx as CSSProperties}>{text}</span>;
   }
 
   return (
-    <span style={sx as React.CSSProperties}>
+    <span style={sx as CSSProperties}>
       {text.slice(0, idx)}
       <mark
         style={{
@@ -109,11 +110,11 @@ export function App() {
   const [selectedProjectId, setSelectedProjectId] = useUrlParam('project');
   const [selectedSessionId, setSelectedSessionId] = useUrlParam('session');
   const [projectSearch, setProjectSearch] = useUrlParam('pq');
+  const [showProjectPane, setShowProjectPane] = useState(true);
   const [showEmptyProjects, setShowEmptyProjects] = useState(false);
   const [minReqStr, setMinReqStr] = useUrlParam('min_req');
   const minRequestThreshold = Math.max(0, parseInt(minReqStr || '5', 10) || 0);
   const [isExportingHtml, setIsExportingHtml] = useState(false);
-  const [sectionMenuAnchor, setSectionMenuAnchor] = useState<HTMLElement | null>(null);
   const [sessionSearch, setSessionSearch] = useState('');
   const [sessionPage, setSessionPage] = useState(0);
 
@@ -131,17 +132,24 @@ export function App() {
   const projects = projectsQuery.data ?? [];
 
   const visibleProjects = useMemo(() => {
-    const base = showEmptyProjects ? projects : projects.filter((project) => project.session_count > 0);
+    const base = showEmptyProjects
+      ? projects
+      : projects.filter((project) => project.session_count > 0);
     if (!projectSearch) return base;
     const q = normalizeKana(projectSearch.toLowerCase());
     return base
       .map((project) => {
-        const nameMatch = normalizeKana(project.display_name.toLowerCase()).includes(q);
-        const filteredWorktrees = project.worktrees.filter(
-          (wt) => normalizeKana(wt.display_name.toLowerCase()).includes(q),
+        const nameMatch = normalizeKana(
+          project.display_name.toLowerCase(),
+        ).includes(q);
+        const filteredWorktrees = project.worktrees.filter((wt) =>
+          normalizeKana(wt.display_name.toLowerCase()).includes(q),
         );
         if (nameMatch || filteredWorktrees.length > 0) {
-          return { ...project, worktrees: nameMatch ? project.worktrees : filteredWorktrees };
+          return {
+            ...project,
+            worktrees: nameMatch ? project.worktrees : filteredWorktrees,
+          };
         }
         return null;
       })
@@ -170,7 +178,9 @@ export function App() {
   const visibleSessions = useMemo(() => {
     let base = sessions as typeof sessions;
     if (minRequestThreshold > 0) {
-      base = base.filter((session) => session.request_count >= minRequestThreshold);
+      base = base.filter(
+        (session) => session.request_count >= minRequestThreshold,
+      );
     }
     if (!sessionSearch) return base;
     const q = normalizeKana(sessionSearch.toLowerCase());
@@ -180,11 +190,13 @@ export function App() {
   }, [sessions, minRequestThreshold, sessionSearch]);
 
   const paginatedSessions = useMemo(
-    () => visibleSessions.slice(sessionPage * SESSION_PAGE_SIZE, (sessionPage + 1) * SESSION_PAGE_SIZE),
+    () =>
+      visibleSessions.slice(
+        sessionPage * SESSION_PAGE_SIZE,
+        (sessionPage + 1) * SESSION_PAGE_SIZE,
+      ),
     [visibleSessions, sessionPage],
   );
-
-
 
   useEffect(() => {
     if (!sessionsQuery.isSuccess) return;
@@ -192,7 +204,10 @@ export function App() {
       setSelectedSessionId(null);
       return;
     }
-    if (!selectedSessionId || !sessions.some((s) => s.session_id === selectedSessionId)) {
+    if (
+      !selectedSessionId ||
+      !sessions.some((s) => s.session_id === selectedSessionId)
+    ) {
       setSelectedSessionId(sessions[0].session_id);
     }
   }, [selectedSessionId, sessions, sessionsQuery.isSuccess]);
@@ -216,12 +231,9 @@ export function App() {
 
   const selectedDocumentPlan = useMemo(
     () =>
-      selectedSessionFile ? resolveSessionDocumentPlan(sessions, selectedSessionFile) : null,
-    [selectedSessionFile, sessions],
-  );
-
-  const selectedSessionLabel = useMemo(
-    () => resolveSessionDocumentSectionLabel(sessions, selectedSessionFile),
+      selectedSessionFile
+        ? resolveSessionDocumentPlan(sessions, selectedSessionFile)
+        : null,
     [selectedSessionFile, sessions],
   );
 
@@ -232,19 +244,16 @@ export function App() {
   const documentQuery = useQuery({
     queryKey: [
       'session-document',
-      selectedDocumentPlan?.sections.map((section) => section.filePath).join('|') ?? '',
+      selectedDocumentPlan?.sections
+        .map((section) => section.filePath)
+        .join('|') ?? '',
     ],
-    queryFn: () => loadSessionDocument(selectedDocumentPlan as NonNullable<typeof selectedDocumentPlan>),
+    queryFn: () =>
+      loadSessionDocument(
+        selectedDocumentPlan as NonNullable<typeof selectedDocumentPlan>,
+      ),
     enabled: selectedDocumentPlan !== null,
   });
-
-  const filteredDocument = useMemo((): LoadedSessionDocument | null => {
-    if (!documentQuery.data) return null;
-    const section =
-      documentQuery.data.sections[selectedSectionTab] ?? documentQuery.data.sections[0];
-    if (!section) return documentQuery.data;
-    return { ...documentQuery.data, sections: [section] };
-  }, [documentQuery.data, selectedSectionTab]);
 
   async function handleExportHtml(): Promise<void> {
     if (!selectedDocumentPlan || !documentQuery.data || isExportingHtml) {
@@ -254,18 +263,17 @@ export function App() {
     try {
       setIsExportingHtml(true);
       await downloadSessionExportHtmlClient({
-        projectName: selectedProject?.display_name ?? selectedProjectId ?? 'project',
         document: documentQuery.data,
+        selectedSectionIndex: selectedSectionTab,
       });
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : 'HTML export に失敗しました。');
+      window.alert(
+        error instanceof Error ? error.message : 'HTML export に失敗しました。',
+      );
     } finally {
       setIsExportingHtml(false);
     }
   }
-
-  const rightPaneTitle =
-    documentQuery.data?.title ?? selectedDocumentPlan?.title ?? selectedSessionLabel ?? 'Document';
 
   return (
     <Box
@@ -281,7 +289,7 @@ export function App() {
       <Stack direction="row" spacing={0} sx={{ flex: 1, overflow: 'hidden' }}>
         <Box
           sx={{
-            width: 240,
+            width: showProjectPane ? 240 : 44,
             flexShrink: 0,
             borderRight: 1,
             borderColor: 'divider',
@@ -289,159 +297,245 @@ export function App() {
             flexDirection: 'column',
             overflow: 'hidden',
             bgcolor: 'rgba(0,0,0,0.25)',
+            transition: 'width 160ms ease',
           }}
         >
-          <Box
-            sx={{
-              px: 2,
-              py: 1.25,
-              borderBottom: 1,
-              borderColor: 'divider',
-              flexShrink: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <Typography
-              variant="caption"
-              sx={{ fontWeight: 600, color: 'text.secondary', letterSpacing: 0.3 }}
-            >
-              プロジェクト
-            </Typography>
-            {hiddenProjectCount > 0 && (
-              <Button
-                size="small"
-                onClick={() => setShowEmptyProjects((value) => !value)}
-                sx={{ fontSize: 11, py: 0, minWidth: 0, color: 'primary.main' }}
+          {showProjectPane ? (
+            <>
+              <Box
+                sx={{
+                  px: 2,
+                  py: 1.25,
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
               >
-                {showEmptyProjects ? '空を非表示' : '空を表示'}
-              </Button>
-            )}
-          </Box>
-          <Box sx={{ px: 1.5, py: 0.75, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
-            <TextField
-              size="small"
-              placeholder="プロジェクトを検索..."
-              value={projectSearch}
-              onChange={(e) => setProjectSearch(e.target.value)}
-              fullWidth
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-                    </InputAdornment>
-                  ),
-                  sx: { fontSize: 12 },
-                },
-              }}
-              sx={{ '& .MuiInputBase-root': { height: 28 } }}
-            />
-          </Box>
-          <Box sx={{ flex: 1, overflowY: 'auto' }}>
-            {projectsQuery.isLoading ? (
-              <Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
-                <CircularProgress size={20} />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <IconButton
+                    size="small"
+                    onClick={() => setShowProjectPane(false)}
+                    title="プロジェクト列を隠す"
+                    aria-label="プロジェクト列を隠す"
+                    sx={{ color: 'text.secondary' }}
+                  >
+                    <ChevronLeftIcon sx={{ fontSize: 20 }} />
+                  </IconButton>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: 600,
+                      color: 'text.secondary',
+                      letterSpacing: 0.3,
+                    }}
+                  >
+                    プロジェクト
+                  </Typography>
+                </Box>
+                {hiddenProjectCount > 0 && (
+                  <Button
+                    size="small"
+                    onClick={() => setShowEmptyProjects((value) => !value)}
+                    sx={{
+                      fontSize: 11,
+                      py: 0,
+                      minWidth: 0,
+                      color: 'primary.main',
+                    }}
+                  >
+                    {showEmptyProjects ? '空を非表示' : '空を表示'}
+                  </Button>
+                )}
               </Box>
-            ) : projectsQuery.error ? (
-              <Alert severity="error" sx={{ m: 1, fontSize: 12 }}>
-                {(projectsQuery.error as Error).message}
-              </Alert>
-            ) : (
-              <>
-                <List dense disablePadding>
-                  {visibleProjects.map((project) => {
-                    const isSelected = project.id === selectedProjectId;
-                    return (
-                      <Box key={project.id}>
-                        <ListItemButton
-                          selected={isSelected}
-                          onClick={() => setSelectedProjectId(project.id)}
-                          sx={{
-                            py: 1,
-                            px: 2,
-                            borderLeft: 3,
-                            borderColor: isSelected ? 'primary.main' : 'transparent',
-                          }}
-                        >
-                          <Box>
-                            <Typography
-                              sx={{
-                                fontSize: 13,
-                                fontWeight: isSelected ? 700 : 400,
-                                lineHeight: 1.3,
-                              }}
-                            >
-                              <HighlightedText text={project.display_name} query={projectSearch} />
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              sx={{ color: 'text.secondary', fontSize: 11 }}
-                            >
-                              {project.session_count} sessions
-                            </Typography>
-                          </Box>
-                        </ListItemButton>
-                        {project.worktrees.map((wt) => {
-                          const isWtSelected = wt.id === selectedProjectId;
-                          return (
+              <Box
+                sx={{
+                  px: 1.5,
+                  py: 0.75,
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                  flexShrink: 0,
+                }}
+              >
+                <TextField
+                  size="small"
+                  placeholder="プロジェクトを検索..."
+                  value={projectSearch}
+                  onChange={(e) => setProjectSearch(e.target.value)}
+                  fullWidth
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon
+                            sx={{ fontSize: 14, color: 'text.disabled' }}
+                          />
+                        </InputAdornment>
+                      ),
+                      sx: { fontSize: 12 },
+                    },
+                  }}
+                  sx={{ '& .MuiInputBase-root': { height: 28 } }}
+                />
+              </Box>
+              <Box sx={{ flex: 1, overflowY: 'auto' }}>
+                {projectsQuery.isLoading ? (
+                  <Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
+                    <CircularProgress size={20} />
+                  </Box>
+                ) : projectsQuery.error ? (
+                  <Alert severity="error" sx={{ m: 1, fontSize: 12 }}>
+                    {(projectsQuery.error as Error).message}
+                  </Alert>
+                ) : (
+                  <>
+                    <List dense disablePadding>
+                      {visibleProjects.map((project) => {
+                        const isSelected = project.id === selectedProjectId;
+                        return (
+                          <Box key={project.id}>
                             <ListItemButton
-                              key={wt.id}
-                              selected={isWtSelected}
-                              onClick={() => setSelectedProjectId(wt.id)}
+                              selected={isSelected}
+                              onClick={() => setSelectedProjectId(project.id)}
                               sx={{
-                                py: 0.75,
-                                pl: 3.5,
-                                pr: 2,
+                                py: 1,
+                                px: 2,
                                 borderLeft: 3,
-                                borderColor: isWtSelected ? 'primary.main' : 'transparent',
+                                borderColor: isSelected
+                                  ? 'primary.main'
+                                  : 'transparent',
                               }}
                             >
-                              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
-                                <AccountTreeIcon
-                                  sx={{ fontSize: 12, color: 'text.disabled', mt: '3px', flexShrink: 0 }}
-                                />
-                                <Box>
-                                  <Typography
-                                    sx={{
-                                      fontSize: 12,
-                                      fontWeight: isWtSelected ? 700 : 400,
-                                      lineHeight: 1.3,
-                                      color: isWtSelected ? 'text.primary' : 'text.secondary',
-                                    }}
-                                  >
-                                    <HighlightedText text={wt.display_name} query={projectSearch} />
-                                  </Typography>
-                                  <Typography
-                                    variant="caption"
-                                    sx={{ color: 'text.disabled', fontSize: 10 }}
-                                  >
-                                    {wt.session_count} sessions
-                                  </Typography>
-                                </Box>
+                              <Box>
+                                <Typography
+                                  sx={{
+                                    fontSize: 13,
+                                    fontWeight: isSelected ? 700 : 400,
+                                    lineHeight: 1.3,
+                                  }}
+                                >
+                                  <HighlightedText
+                                    text={project.display_name}
+                                    query={projectSearch}
+                                  />
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  sx={{ color: 'text.secondary', fontSize: 11 }}
+                                >
+                                  {project.session_count} sessions
+                                </Typography>
                               </Box>
                             </ListItemButton>
-                          );
-                        })}
+                            {project.worktrees.map((wt) => {
+                              const isWtSelected = wt.id === selectedProjectId;
+                              return (
+                                <ListItemButton
+                                  key={wt.id}
+                                  selected={isWtSelected}
+                                  onClick={() => setSelectedProjectId(wt.id)}
+                                  sx={{
+                                    py: 0.75,
+                                    pl: 3.5,
+                                    pr: 2,
+                                    borderLeft: 3,
+                                    borderColor: isWtSelected
+                                      ? 'primary.main'
+                                      : 'transparent',
+                                  }}
+                                >
+                                  <Box
+                                    sx={{
+                                      display: 'flex',
+                                      alignItems: 'flex-start',
+                                      gap: 0.5,
+                                    }}
+                                  >
+                                    <AccountTreeIcon
+                                      sx={{
+                                        fontSize: 12,
+                                        color: 'text.disabled',
+                                        mt: '3px',
+                                        flexShrink: 0,
+                                      }}
+                                    />
+                                    <Box>
+                                      <Typography
+                                        sx={{
+                                          fontSize: 12,
+                                          fontWeight: isWtSelected ? 700 : 400,
+                                          lineHeight: 1.3,
+                                          color: isWtSelected
+                                            ? 'text.primary'
+                                            : 'text.secondary',
+                                        }}
+                                      >
+                                        <HighlightedText
+                                          text={wt.display_name}
+                                          query={projectSearch}
+                                        />
+                                      </Typography>
+                                      <Typography
+                                        variant="caption"
+                                        sx={{
+                                          color: 'text.disabled',
+                                          fontSize: 10,
+                                        }}
+                                      >
+                                        {wt.session_count} sessions
+                                      </Typography>
+                                    </Box>
+                                  </Box>
+                                </ListItemButton>
+                              );
+                            })}
+                          </Box>
+                        );
+                      })}
+                    </List>
+                    {!showEmptyProjects && hiddenProjectCount > 0 && (
+                      <Box sx={{ px: 2, py: 1 }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: 'text.disabled',
+                            fontSize: 11,
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => setShowEmptyProjects(true)}
+                        >
+                          {hiddenProjectCount}{' '}
+                          件のセッションなしのプロジェクトを非表示
+                        </Typography>
                       </Box>
-                    );
-                  })}
-                </List>
-                {!showEmptyProjects && hiddenProjectCount > 0 && (
-                  <Box sx={{ px: 2, py: 1 }}>
-                    <Typography
-                      variant="caption"
-                      sx={{ color: 'text.disabled', fontSize: 11, cursor: 'pointer' }}
-                      onClick={() => setShowEmptyProjects(true)}
-                    >
-                      {hiddenProjectCount} 件のセッションなしのプロジェクトを非表示
-                    </Typography>
-                  </Box>
+                    )}
+                  </>
                 )}
-              </>
-            )}
-          </Box>
+              </Box>
+            </>
+          ) : (
+            <Box
+              sx={{
+                pt: 0.75,
+                display: 'flex',
+                justifyContent: 'flex-start',
+                px: 0.75,
+                flexShrink: 0,
+              }}
+            >
+              <IconButton
+                size="small"
+                onClick={() => setShowProjectPane(true)}
+                title="プロジェクト列を表示"
+                aria-label="プロジェクト列を表示"
+                sx={{ color: 'text.secondary' }}
+              >
+                <ChevronRightIcon sx={{ fontSize: 20 }} />
+              </IconButton>
+            </Box>
+          )}
         </Box>
 
         <Box
@@ -469,33 +563,95 @@ export function App() {
               minHeight: 40,
             }}
           >
-            <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
-              {selectedProject
-                ? `${selectedProject.display_name} (${selectedProject.session_count})`
-                : 'Sessions'}
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                minWidth: 0,
+                flex: 1,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {selectedProject
+                  ? `${selectedProject.display_name} (${selectedProject.session_count})`
+                  : 'Sessions'}
+              </Typography>
+            </Box>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.25,
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+                overflow: 'hidden',
+              }}
+            >
               <Button
                 size="small"
-                onClick={() => setMinReqStr(String(Math.max(0, minRequestThreshold - 1)))}
+                onClick={() =>
+                  setMinReqStr(String(Math.max(0, minRequestThreshold - 1)))
+                }
                 disabled={minRequestThreshold <= 0}
-                sx={{ minWidth: 22, px: 0, py: 0, height: 22, fontSize: 14, lineHeight: 1, borderRadius: 0 }}
+                sx={{
+                  minWidth: 22,
+                  px: 0,
+                  py: 0,
+                  height: 22,
+                  fontSize: 14,
+                  lineHeight: 1,
+                  borderRadius: 0,
+                }}
               >
                 −
               </Button>
-              <Typography sx={{ fontSize: 11, color: 'text.secondary', minWidth: 28, textAlign: 'center', userSelect: 'none' }}>
+              <Typography
+                sx={{
+                  fontSize: 11,
+                  color: 'text.secondary',
+                  minWidth: 28,
+                  textAlign: 'center',
+                  userSelect: 'none',
+                }}
+              >
                 {minRequestThreshold}
               </Typography>
               <Button
                 size="small"
                 onClick={() => setMinReqStr(String(minRequestThreshold + 1))}
-                sx={{ minWidth: 22, px: 0, py: 0, height: 22, fontSize: 14, lineHeight: 1, borderRadius: 0 }}
+                sx={{
+                  minWidth: 22,
+                  px: 0,
+                  py: 0,
+                  height: 22,
+                  fontSize: 14,
+                  lineHeight: 1,
+                  borderRadius: 0,
+                }}
               >
                 +
               </Button>
             </Box>
           </Box>
-          <Box sx={{ px: 1.5, py: 0.75, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
+          <Box
+            sx={{
+              px: 1.5,
+              py: 0.75,
+              borderBottom: 1,
+              borderColor: 'divider',
+              flexShrink: 0,
+            }}
+          >
             <TextField
               size="small"
               placeholder="セッションを検索..."
@@ -506,7 +662,9 @@ export function App() {
                 input: {
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+                      <SearchIcon
+                        sx={{ fontSize: 14, color: 'text.disabled' }}
+                      />
                     </InputAdornment>
                   ),
                   sx: { fontSize: 12 },
@@ -543,7 +701,10 @@ export function App() {
                     <Typography
                       sx={{
                         fontSize: 13,
-                        fontWeight: session.jsonl_path === selectedSessionFile ? 600 : 400,
+                        fontWeight:
+                          session.jsonl_path === selectedSessionFile
+                            ? 600
+                            : 400,
                         width: '100%',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
@@ -551,15 +712,33 @@ export function App() {
                         lineHeight: 1.4,
                       }}
                     >
-                      <HighlightedText text={sessionDisplayLabel(session)} query={sessionSearch} />
+                      <HighlightedText
+                        text={sessionDisplayLabel(session)}
+                        query={sessionSearch}
+                      />
                     </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.25 }}>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.75,
+                        mt: 0.25,
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontSize: 11 }}
+                      >
                         {renderTimestamp(session.timestamp)}
                       </Typography>
                       {session.subagents.length > 0 && (
                         <Chip
-                          icon={<SmartToyIcon sx={{ fontSize: '11px !important' }} />}
+                          icon={
+                            <SmartToyIcon
+                              sx={{ fontSize: '11px !important' }}
+                            />
+                          }
                           label={session.subagents.length}
                           size="small"
                           sx={{
@@ -572,7 +751,9 @@ export function App() {
                       )}
                       {session.team_sessions.length > 0 && (
                         <Chip
-                          icon={<GroupsIcon sx={{ fontSize: '11px !important' }} />}
+                          icon={
+                            <GroupsIcon sx={{ fontSize: '11px !important' }} />
+                          }
                           label={session.team_sessions.length}
                           size="small"
                           sx={{
@@ -590,7 +771,17 @@ export function App() {
             )}
           </Box>
           {visibleSessions.length > SESSION_PAGE_SIZE && (
-            <Box sx={{ px: 1, py: 0.75, borderTop: 1, borderColor: 'divider', flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
+            <Box
+              sx={{
+                px: 1,
+                py: 0.75,
+                borderTop: 1,
+                borderColor: 'divider',
+                flexShrink: 0,
+                display: 'flex',
+                justifyContent: 'center',
+              }}
+            >
               <Pagination
                 count={Math.ceil(visibleSessions.length / SESSION_PAGE_SIZE)}
                 page={sessionPage + 1}
@@ -602,10 +793,19 @@ export function App() {
           )}
         </Box>
 
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <Box
+          sx={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+        >
           {!selectedSessionFile ? (
             <Box sx={{ p: 3 }}>
-              <Typography color="text.secondary">セッションを選択してください。</Typography>
+              <Typography color="text.secondary">
+                セッションを選択してください。
+              </Typography>
             </Box>
           ) : documentQuery.isLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -613,163 +813,27 @@ export function App() {
             </Box>
           ) : documentQuery.error ? (
             <Box sx={{ p: 3 }}>
-              <Alert severity="error">{(documentQuery.error as Error).message}</Alert>
+              <Alert severity="error">
+                {(documentQuery.error as Error).message}
+              </Alert>
             </Box>
-          ) : !documentQuery.data || !filteredDocument ? (
+          ) : !documentQuery.data ? (
             <Box sx={{ p: 3 }}>
-              <Typography color="text.secondary">document を読み込めませんでした。</Typography>
+              <Typography color="text.secondary">
+                document を読み込めませんでした。
+              </Typography>
             </Box>
           ) : (
-            <>
-              <Box sx={{ px: 3, py: 1.5, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontSize: 14, fontWeight: 600 }}>{rightPaneTitle}</Typography>
-                  </Box>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => {
-                      void handleExportHtml();
-                    }}
-                    disabled={isExportingHtml}
-                    sx={{ flexShrink: 0 }}
-                  >
-                    {isExportingHtml ? 'Exporting…' : 'HTML Export'}
-                  </Button>
-                </Box>
-              </Box>
-
-              {documentQuery.data.sections.length > 1 && (
-                <Box sx={{ borderBottom: 1, borderColor: 'divider', flexShrink: 0, display: 'flex', alignItems: 'stretch' }}>
-                  <Tabs
-                    value={selectedSectionTab}
-                    onChange={(_, value: number) => setSelectedSectionTab(value)}
-                    sx={{ minHeight: 36, flex: 1, minWidth: 0 }}
-                    variant="scrollable"
-                    scrollButtons="auto"
-                  >
-                    {documentQuery.data.sections.map((section, index) => {
-                      const total = section.analysis.total;
-                      const totalTokens =
-                        total.latest_total_input_tokens +
-                        total.latest_output_tokens;
-                      const modelKeys = Object.keys(section.analysis.by_model);
-
-                      return (
-                        <Tab
-                          key={section.filePath}
-                          label={
-                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0, maxWidth: 160, minWidth: 0 }}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', minWidth: 0 }}>
-                                {section.kind === 'team' ? (
-                                  <GroupsIcon sx={{ fontSize: 13, flexShrink: 0 }} />
-                                ) : section.kind === 'subagent' ? (
-                                  <SmartToyIcon sx={{ fontSize: 13, flexShrink: 0 }} />
-                                ) : null}
-                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{section.title}</span>
-                              </Box>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, lineHeight: 1.4 }}>
-                                {modelKeys.map((m) => (
-                                  <span key={m} style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: modelColor(m), display: 'inline-block', flexShrink: 0 }} />
-                                ))}
-                                {section.kind !== 'session' && section.subtitle && (
-                                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.38)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{section.subtitle}</span>
-                                )}
-                                {totalTokens > 0 && (
-                                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.38)', flexShrink: 0 }}>{fmtTokens(totalTokens)}</span>
-                                )}
-                              </Box>
-                            </Box>
-                          }
-                          value={index}
-                          sx={{ minHeight: 44, py: 0.5, fontSize: 12, alignItems: 'flex-start', maxWidth: 180 }}
-                        />
-                      );
-                    })}
-                  </Tabs>
-                  <Button
-                    size="small"
-                    onClick={(e) => setSectionMenuAnchor(e.currentTarget)}
-                    sx={{
-                      flexShrink: 0,
-                      px: 1,
-                      minWidth: 36,
-                      borderLeft: 1,
-                      borderColor: 'divider',
-                      borderRadius: 0,
-                      fontSize: 11,
-                      color: 'text.secondary',
-                    }}
-                  >
-                    ▼
-                  </Button>
-                  <Menu
-                    anchorEl={sectionMenuAnchor}
-                    open={Boolean(sectionMenuAnchor)}
-                    onClose={() => setSectionMenuAnchor(null)}
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                    transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                  >
-                    {documentQuery.data.sections.map((section, index) => {
-                      const total = section.analysis.total;
-                      const totalTokens =
-                        total.latest_total_input_tokens +
-                        total.latest_output_tokens;
-                      const modelKeys = Object.keys(section.analysis.by_model);
-                      return (
-                        <MenuItem
-                          key={section.filePath}
-                          selected={index === selectedSectionTab}
-                          onClick={() => {
-                            setSelectedSectionTab(index);
-                            setSectionMenuAnchor(null);
-                          }}
-                          sx={{ fontSize: 12, gap: 1, minWidth: 220 }}
-                        >
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flex: 1, minWidth: 0 }}>
-                            {section.kind === 'team' ? (
-                              <GroupsIcon sx={{ fontSize: 14, flexShrink: 0, color: 'text.secondary' }} />
-                            ) : section.kind === 'subagent' ? (
-                              <SmartToyIcon sx={{ fontSize: 14, flexShrink: 0, color: 'text.secondary' }} />
-                            ) : null}
-                            <Box sx={{ minWidth: 0, flex: 1 }}>
-                              <Typography sx={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {section.title}
-                              </Typography>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
-                                {modelKeys.map((m) => (
-                                  <span key={m} style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: modelColor(m), display: 'inline-block', flexShrink: 0 }} />
-                                ))}
-                                {section.kind !== 'session' && section.subtitle && (
-                                  <Typography sx={{ fontSize: 10, color: 'text.disabled', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {section.subtitle}
-                                  </Typography>
-                                )}
-                                {totalTokens > 0 && (
-                                  <Typography sx={{ fontSize: 10, color: 'text.disabled', flexShrink: 0 }}>
-                                    · {fmtTokens(totalTokens)}
-                                  </Typography>
-                                )}
-                              </Box>
-                            </Box>
-                          </Box>
-                        </MenuItem>
-                      );
-                    })}
-                  </Menu>
-                </Box>
-              )}
-
-              <Box sx={{ flex: 1, overflowY: 'auto', px: 3, py: 2 }}>
-                <SessionDocument
-                  document={filteredDocument}
-                  mode="interactive"
-                  view="both"
-                  selectedFilePath={filteredDocument.sections[0]?.filePath}
-                />
-              </Box>
-            </>
+            <SessionPane
+              document={documentQuery.data}
+              mode="interactive"
+              selectedSectionIndex={selectedSectionTab}
+              onSectionSelect={setSelectedSectionTab}
+              onExportHtml={() => {
+                void handleExportHtml();
+              }}
+              isExportingHtml={isExportingHtml}
+            />
           )}
         </Box>
       </Stack>

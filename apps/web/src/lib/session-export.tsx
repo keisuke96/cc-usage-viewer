@@ -1,17 +1,55 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import { SESSION_DOCUMENT_CSS_TEXT } from '../app/SessionDocument';
+import { SessionPane, SESSION_PANE_CSS_TEXT } from '../app/SessionPane';
 import type { LoadedSessionDocument } from './session-document';
-import {
-  SessionDocument,
-  SESSION_DOCUMENT_CSS_TEXT,
-} from '../app/SessionDocument';
 
 type DownloadSessionExportArgs = {
-  projectName: string;
   document: LoadedSessionDocument;
+  selectedSectionIndex?: number;
 };
 
-function downloadTextFile(filename: string, content: string, mimeType: string): void {
+const SESSION_PANE_EXPORT_JS = `
+(function(){
+  var roots = document.querySelectorAll('[data-session-pane-root="true"]');
+  roots.forEach(function(root){
+    var tabs = Array.prototype.slice.call(root.querySelectorAll('[data-session-pane-tab]'));
+    var panels = Array.prototype.slice.call(root.querySelectorAll('[data-session-pane-panel]'));
+    if (!tabs.length || !panels.length) return;
+
+    function activate(index){
+      tabs.forEach(function(tab){
+        var tabIndex = Number(tab.getAttribute('data-session-pane-tab'));
+        var active = tabIndex === index;
+        tab.classList.toggle('session-pane__tab--active', active);
+        tab.classList.toggle('session-pane__menu-item--active', active);
+        tab.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      panels.forEach(function(panel){
+        var panelIndex = Number(panel.getAttribute('data-session-pane-panel'));
+        var active = panelIndex === index;
+        panel.hidden = !active;
+        panel.classList.toggle('session-pane__panel--active', active);
+      });
+    }
+
+    tabs.forEach(function(tab){
+      tab.addEventListener('click', function(){
+        var index = Number(tab.getAttribute('data-session-pane-tab'));
+        if (!Number.isNaN(index)) activate(index);
+        var details = tab.closest('details');
+        if (details) details.removeAttribute('open');
+      });
+    });
+  });
+})();
+`;
+
+function downloadTextFile(
+  filename: string,
+  content: string,
+  mimeType: string,
+): void {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
@@ -23,80 +61,10 @@ function downloadTextFile(filename: string, content: string, mimeType: string): 
   URL.revokeObjectURL(url);
 }
 
-const EXPORT_TAB_CSS = `
-.export-tab-bar {
-  display: flex;
-  border-bottom: 1px solid rgba(255,255,255,0.12);
-  margin-bottom: 0;
-  overflow-x: auto;
-}
-.export-tab-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 16px;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: rgba(255,255,255,0.6);
-  font-size: 13px;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: color 0.15s, border-color 0.15s;
-  margin-bottom: -1px;
-}
-.export-tab-btn:hover {
-  color: rgba(255,255,255,0.88);
-}
-.export-tab-btn.active {
-  color: #90caf9;
-  border-bottom-color: #90caf9;
-}
-.export-tab-btn__kind {
-  font-size: 10px;
-  opacity: 0.6;
-}
-.export-tab-panel { display: none; }
-.export-tab-panel.active { display: block; }
-.export-tab-panel .session-document--export {
-  padding-top: 24px;
-  padding-left: 0;
-  padding-right: 0;
-  max-width: none;
-  margin: 0;
-}
-`;
-
-const EXPORT_TAB_JS = `
-(function(){
-  var btns=document.querySelectorAll('.export-tab-btn');
-  var panels=document.querySelectorAll('.export-tab-panel');
-  btns.forEach(function(btn,i){
-    btn.addEventListener('click',function(){
-      btns.forEach(function(b){b.classList.remove('active');});
-      panels.forEach(function(p){p.classList.remove('active');});
-      btn.classList.add('active');
-      panels[i].classList.add('active');
-    });
-  });
-})();
-`;
-
-function sectionKindLabel(kind: string): string {
-  if (kind === 'subagent') return 'Subagent';
-  if (kind === 'team') return 'Team';
-  return '';
-}
-
 function ExportHtmlPage({
-  projectName,
   document,
+  selectedSectionIndex,
 }: DownloadSessionExportArgs) {
-  const hasTabs = document.sections.length > 1;
-  const totalMessages = document.sections.reduce((n, s) => n + s.messages.length, 0);
-
   return (
     <html lang="ja">
       <head>
@@ -104,75 +72,29 @@ function ExportHtmlPage({
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{document.title}</title>
         <style>{SESSION_DOCUMENT_CSS_TEXT}</style>
-        {hasTabs && <style>{EXPORT_TAB_CSS}</style>}
+        <style>{SESSION_PANE_CSS_TEXT}</style>
       </head>
       <body className="session-export-body">
-        <div className="session-document session-document--export">
-          <header className="session-document__header">
-            <h1>{document.title}</h1>
-            <div className="session-document__meta">
-              {projectName && <span>{projectName}</span>}
-              <span>{document.sections.length} sections</span>
-              <span>{totalMessages} messages</span>
-              <span>exported {new Date().toISOString()}</span>
-            </div>
-          </header>
-
-          {hasTabs && (
-            <div className="export-tab-bar">
-              {document.sections.map((section, index) => (
-                <button
-                  key={section.filePath}
-                  type="button"
-                  className={`export-tab-btn${index === 0 ? ' active' : ''}`}
-                >
-                  {sectionKindLabel(section.kind) && (
-                    <span className="export-tab-btn__kind">
-                      {sectionKindLabel(section.kind)}
-                    </span>
-                  )}
-                  {section.title}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {hasTabs ? (
-            document.sections.map((section, index) => (
-              <div
-                key={section.filePath}
-                className={`export-tab-panel${index === 0 ? ' active' : ''}`}
-              >
-                <SessionDocument
-                  document={{ ...document, sections: [section] }}
-                  mode="export"
-                  view="both"
-                />
-              </div>
-            ))
-          ) : (
-            <SessionDocument
-              document={document}
-              mode="export"
-              view="both"
-              projectName={projectName}
-            />
-          )}
-        </div>
-        {hasTabs && (
-          <script dangerouslySetInnerHTML={{ __html: EXPORT_TAB_JS }} />
-        )}
+        <SessionPane
+          document={document}
+          mode="export"
+          selectedSectionIndex={selectedSectionIndex}
+        />
+        <script dangerouslySetInnerHTML={{ __html: SESSION_PANE_EXPORT_JS }} />
       </body>
     </html>
   );
 }
 
 export async function downloadSessionExportHtmlClient({
-  projectName,
   document,
+  selectedSectionIndex,
 }: DownloadSessionExportArgs): Promise<void> {
   const html = `<!doctype html>${renderToStaticMarkup(
-    <ExportHtmlPage projectName={projectName} document={document} />,
+    <ExportHtmlPage
+      document={document}
+      selectedSectionIndex={selectedSectionIndex}
+    />,
   )}`;
 
   downloadTextFile(document.filename, html, 'text/html;charset=utf-8');
