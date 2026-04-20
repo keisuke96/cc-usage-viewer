@@ -111,6 +111,23 @@
   flex-shrink: 0;
 }
 
+.analysis-summary__details {
+  margin-top: 0;
+}
+
+.analysis-summary__details-summary {
+  font-size: 12px;
+  color: var(--session-text-3);
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 0;
+  list-style: none;
+}
+
+.analysis-summary__details-summary::-webkit-details-marker {
+  display: none;
+}
+
 .analysis-summary__subtitle {
   font-size: 11px;
   color: var(--session-text-2);

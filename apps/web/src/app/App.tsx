@@ -187,6 +187,7 @@ export function App() {
 
 
   useEffect(() => {
+    if (!sessionsQuery.isSuccess) return;
     if (!sessions.length) {
       setSelectedSessionId(null);
       return;
@@ -194,7 +195,7 @@ export function App() {
     if (!selectedSessionId || !sessions.some((s) => s.session_id === selectedSessionId)) {
       setSelectedSessionId(sessions[0].session_id);
     }
-  }, [selectedSessionId, sessions]);
+  }, [selectedSessionId, sessions, sessionsQuery.isSuccess]);
 
   const selectedSessionFile = useMemo(() => {
     if (!selectedSessionId || !sessions.length) return null;

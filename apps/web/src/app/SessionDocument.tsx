@@ -1227,6 +1227,57 @@ function AnalysisSummary({
   );
   const toolStats = analysis.tool_stats;
 
+  const expandedContent = (
+    <>
+      <div className="summary-grid" style={{ marginTop: 12 }}>
+        <SummaryStat label="Total Input" value={fmtTokens(totalInput)} />
+        <SummaryStat label="Output" value={fmtTokens(total.output_tokens)} />
+        <SummaryStat label="Cache Hit" value={fmtTokens(total.cache_read_tokens)} />
+        <SummaryStat label="Cache Write" value={fmtTokens(total.cache_creation_5m + total.cache_creation_1h)} />
+      </div>
+      <div className="analysis-summary__note">
+        Token Usage = 最新リクエスト 1 件の総入力 + 総出力。Total Output と
+        Cache 系はセッション累計です。
+      </div>
+      {modelEntries.length > 0 && (
+        <div className="analysis-block">
+          <h3>モデル別</h3>
+          <div className="table-wrap">
+            <table className="analysis-table">
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <th>Req</th>
+                  <th>Input</th>
+                  <th>Cache Hit</th>
+                  <th>Cache Write</th>
+                  <th>Output</th>
+                  <th>Hit Rate</th>
+                  <th>Cost (est.)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {modelEntries.map(([model, stats]) => (
+                  <tr key={model}>
+                    <td>{model}</td>
+                    <td>{stats.requests}</td>
+                    <td>{fmtTokens(stats.input_tokens)}</td>
+                    <td>{fmtTokens(stats.cache_read_tokens)}</td>
+                    <td>{fmtTokens(stats.cache_creation_5m + stats.cache_creation_1h)}</td>
+                    <td>{fmtTokens(stats.output_tokens)}</td>
+                    <td>{fmtPct(stats.cache_hit_rate)}</td>
+                    <td>{fmtCost(stats.cost_usd)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <ToolStatsSection toolStats={toolStats} />
+    </>
+  );
+
   return (
     <section
       className={className ? className : 'session-document__analysis'}
@@ -1275,70 +1326,13 @@ function AnalysisSummary({
       )}
 
       {/* 展開時のみ: 詳細カード・テーブル・ツール統計 */}
-      {(!isInteractive || isOpen) && (
-        <>
-          <div className="summary-grid" style={{ marginTop: 12 }}>
-            <SummaryStat
-              label="Total Input"
-              value={fmtTokens(totalInput)}
-            />
-            <SummaryStat label="Output" value={fmtTokens(total.output_tokens)} />
-            <SummaryStat
-              label="Cache Hit"
-              value={fmtTokens(total.cache_read_tokens)}
-            />
-            <SummaryStat
-              label="Cache Write"
-              value={fmtTokens(total.cache_creation_5m + total.cache_creation_1h)}
-            />
-          </div>
-          <div className="analysis-summary__note">
-            Token Usage = 最新リクエスト 1 件の総入力 + 総出力。Total Output と
-            Cache 系はセッション累計です。
-          </div>
-
-          {modelEntries.length > 0 && (
-            <div className="analysis-block">
-              <h3>モデル別</h3>
-              <div className="table-wrap">
-                <table className="analysis-table">
-                  <thead>
-                    <tr>
-                      <th>Model</th>
-                      <th>Req</th>
-                      <th>Input</th>
-                      <th>Cache Hit</th>
-                      <th>Cache Write</th>
-                      <th>Output</th>
-                      <th>Hit Rate</th>
-                      <th>Cost (est.)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {modelEntries.map(([model, stats]) => (
-                      <tr key={model}>
-                        <td>{model}</td>
-                        <td>{stats.requests}</td>
-                        <td>{fmtTokens(stats.input_tokens)}</td>
-                        <td>{fmtTokens(stats.cache_read_tokens)}</td>
-                        <td>
-                          {fmtTokens(
-                            stats.cache_creation_5m + stats.cache_creation_1h,
-                          )}
-                        </td>
-                        <td>{fmtTokens(stats.output_tokens)}</td>
-                        <td>{fmtPct(stats.cache_hit_rate)}</td>
-                        <td>{fmtCost(stats.cost_usd)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          <ToolStatsSection toolStats={toolStats} />
-        </>
+      {isInteractive ? (
+        isOpen && expandedContent
+      ) : (
+        <details className="analysis-summary__details">
+          <summary className="analysis-summary__details-summary">詳細 ▾</summary>
+          {expandedContent}
+        </details>
       )}
     </section>
   );
