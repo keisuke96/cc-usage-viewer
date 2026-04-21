@@ -149,12 +149,21 @@ async function countRequests(jsonlPath: string): Promise<number> {
 async function checkTeamSession(jsonlPath: string): Promise<boolean> {
   try {
     const content = await readFile(jsonlPath, 'utf8');
-    const firstUserMarker = content.indexOf('"type":"user"');
-    if (firstUserMarker === -1) {
-      return false;
+    for (const line of content.split('\n')) {
+      if (!line.includes('"type":"user"')) continue;
+      try {
+        const obj = JSON.parse(line) as {
+          type?: unknown;
+          message?: { content?: unknown };
+        };
+        if (obj.type !== 'user') continue;
+        const msgContent = obj.message?.content;
+        return typeof msgContent === 'string' && msgContent.includes('<teammate-message');
+      } catch {
+        continue;
+      }
     }
-
-    return content.includes('<teammate-message');
+    return false;
   } catch {
     return false;
   }
