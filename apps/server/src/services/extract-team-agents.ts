@@ -168,6 +168,7 @@ export async function extractTeamAgents(
           for (const [peerPath, firstContent] of peerTeamSessionMap.entries()) {
             if (firstContent.includes(promptKey)) {
               jsonlPath = peerPath;
+              peerTeamSessionMap.delete(peerPath);
               break;
             }
           }

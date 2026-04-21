@@ -138,7 +138,7 @@ export function SessionPane({
               if (mode === 'interactive' && onSectionSelect) {
                 return (
                   <button
-                    key={section.filePath}
+                    key={`${section.filePath}:${index}`}
                     type="button"
                     role="tab"
                     aria-selected={isActive}
@@ -152,7 +152,7 @@ export function SessionPane({
 
               return (
                 <button
-                  key={section.filePath}
+                  key={`${section.filePath}:${index}`}
                   type="button"
                   role="tab"
                   aria-selected={isActive}
@@ -180,7 +180,7 @@ export function SessionPane({
                   if (mode === 'interactive' && onSectionSelect) {
                     return (
                       <button
-                        key={section.filePath}
+                        key={`${section.filePath}:${index}`}
                         type="button"
                         className={className}
                         onClick={(event) => {
@@ -206,7 +206,7 @@ export function SessionPane({
 
                   return (
                     <button
-                      key={section.filePath}
+                      key={`${section.filePath}:${index}`}
                       type="button"
                       className={className}
                       data-session-pane-tab={index}
@@ -232,7 +232,7 @@ export function SessionPane({
         {mode === 'export' ? (
           document.sections.map((section, index) => (
             <div
-              key={section.filePath}
+              key={`${section.filePath}:${index}`}
               className={[
                 'session-pane__panel',
                 index === activeIndex ? 'session-pane__panel--active' : '',

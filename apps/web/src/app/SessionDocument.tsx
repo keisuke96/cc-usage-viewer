@@ -1674,7 +1674,7 @@ export function SessionDocument({
 
   return (
     <div ref={rootRef} className={rootClassName}>
-      {document.sections.map((section) => {
+      {document.sections.map((section, sectionIndex) => {
         const sectionClassName = [
           'session-section',
           selectedFilePath === section.filePath
@@ -1685,7 +1685,7 @@ export function SessionDocument({
           .join(' ');
 
         return (
-          <div key={section.filePath}>
+          <div key={`${section.filePath}:${sectionIndex}`}>
             {showAnalysis && (
               <AnalysisSummary
                 analysis={section.analysis}
