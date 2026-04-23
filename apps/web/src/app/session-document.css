@@ -50,7 +50,6 @@
   padding: 0;
 }
 
-
 .session-document__header,
 .session-document__analysis,
 .session-section {
@@ -415,7 +414,9 @@
   color: var(--session-text-2);
   cursor: pointer;
   border-radius: 8px;
-  transition: color 120ms ease, background 120ms ease;
+  transition:
+    color 120ms ease,
+    background 120ms ease;
 }
 
 .session-search__icon-btn:hover {
@@ -513,9 +514,21 @@
 }
 
 @keyframes timeline-highlight-blink {
-  0%, 100% { outline: 2px solid transparent; outline-offset: 3px; }
-  20%, 60% { outline: 2px solid rgba(88, 166, 255, 0.8); outline-offset: 3px; }
-  40%, 80% { outline: 2px solid transparent; outline-offset: 3px; }
+  0%,
+  100% {
+    outline: 2px solid transparent;
+    outline-offset: 3px;
+  }
+  20%,
+  60% {
+    outline: 2px solid rgba(88, 166, 255, 0.8);
+    outline-offset: 3px;
+  }
+  40%,
+  80% {
+    outline: 2px solid transparent;
+    outline-offset: 3px;
+  }
 }
 
 .session-message--timeline-highlight {
@@ -909,11 +922,13 @@
 }
 
 .tool-body,
+.result-body,
 .result-pre {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.tool-body {
+.tool-body,
+.result-body {
   padding: 12px 14px 14px;
 }
 
@@ -926,6 +941,51 @@
   font-size: 12px;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.file-viewer-scroll {
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.file-viewer-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.file-viewer-line-no,
+.file-viewer-code {
+  font-family: "SFMono-Regular", ui-monospace, Menlo, monospace;
+  font-size: 11px;
+}
+
+.file-viewer-row + .file-viewer-row td {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.file-viewer-line-no {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 58px;
+  padding: 2px 8px 2px 10px;
+  text-align: right;
+  color: var(--session-text-3);
+  user-select: none;
+  white-space: nowrap;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.file-viewer-code {
+  padding: 2px 12px;
+  color: var(--session-text-2);
+  line-height: 1.55;
+  white-space: pre;
 }
 
 .pill-row {

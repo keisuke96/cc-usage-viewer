@@ -13,7 +13,77 @@ function asRecord(value: unknown): JsonRecord | null {
   return value as JsonRecord;
 }
 
-function parseContentItem(contentItem: JsonRecord): ChatContentItem | null {
+function asNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function countContentLines(text: string): number {
+  if (!text) {
+    return 0;
+  }
+
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  if (lines.at(-1) === '') {
+    lines.pop();
+  }
+  return lines.length;
+}
+
+function parseToolResultFile(
+  record: JsonRecord | undefined,
+): Extract<ChatContentItem, { type: 'tool_result' }>['file'] {
+  const toolUseResult = asRecord(record?.toolUseResult);
+  const fileResult = asRecord(toolUseResult?.file);
+  const readFilePath =
+    typeof fileResult?.filePath === 'string' ? fileResult.filePath : null;
+  const readFileContent =
+    typeof fileResult?.content === 'string' ? fileResult.content : null;
+
+  if (fileResult && readFilePath && readFileContent !== null) {
+    const numLines =
+      asNumber(fileResult.numLines) ?? countContentLines(readFileContent);
+    const startLine = asNumber(fileResult.startLine) ?? 1;
+    const totalLines = asNumber(fileResult.totalLines) ?? numLines;
+
+    return {
+      file_path: readFilePath,
+      content: readFileContent,
+      num_lines: numLines,
+      start_line: startLine,
+      total_lines: totalLines,
+    };
+  }
+
+  const resultType =
+    typeof toolUseResult?.type === 'string' ? toolUseResult.type : '';
+  const writeFilePath =
+    typeof toolUseResult?.filePath === 'string' ? toolUseResult.filePath : null;
+  const writeFileContent =
+    typeof toolUseResult?.content === 'string' ? toolUseResult.content : null;
+
+  if (
+    (resultType === 'create' || resultType === 'update') &&
+    writeFilePath &&
+    writeFileContent !== null
+  ) {
+    const lineCount = countContentLines(writeFileContent);
+
+    return {
+      file_path: writeFilePath,
+      content: writeFileContent,
+      num_lines: lineCount,
+      start_line: 1,
+      total_lines: lineCount,
+    };
+  }
+
+  return undefined;
+}
+
+function parseContentItem(
+  contentItem: JsonRecord,
+  record?: JsonRecord,
+): ChatContentItem | null {
   const contentType =
     typeof contentItem.type === 'string' ? contentItem.type : '';
 
@@ -58,6 +128,7 @@ function parseContentItem(contentItem: JsonRecord): ChatContentItem | null {
       type: 'tool_result',
       content,
       is_error: Boolean(contentItem.is_error),
+      file: parseToolResultFile(record),
     };
   }
 
@@ -180,7 +251,7 @@ export async function parseChat(jsonlPath: string): Promise<ChatMessage[]> {
       parsedContent = content
         .map((entry) => {
           const item = asRecord(entry);
-          return item ? parseContentItem(item) : null;
+          return item ? parseContentItem(item, record) : null;
         })
         .filter((entry): entry is ChatContentItem => entry !== null);
     }

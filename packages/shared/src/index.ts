@@ -67,10 +67,19 @@ export const chatToolUseItemSchema = z.object({
   input: z.record(z.string(), z.unknown()),
 });
 
+export const chatToolResultFileSchema = z.object({
+  file_path: z.string(),
+  content: z.string(),
+  num_lines: z.number().int().nonnegative(),
+  start_line: z.number().int().positive(),
+  total_lines: z.number().int().nonnegative(),
+});
+
 export const chatToolResultItemSchema = z.object({
   type: z.literal('tool_result'),
   content: z.string(),
   is_error: z.boolean(),
+  file: chatToolResultFileSchema.optional(),
 });
 
 export const chatAdvisorCallItemSchema = z.object({

@@ -16,24 +16,18 @@ import {
   formatDiffRange,
 } from '@ccuv/shared';
 import { BarChart } from 'echarts/charts';
-import type { EChartsCoreOption } from 'echarts/core';
-import * as echarts from 'echarts/core';
 import {
   GridComponent,
   LegendComponent,
   TooltipComponent,
 } from 'echarts/components';
+import type { EChartsCoreOption } from 'echarts/core';
+import * as echarts from 'echarts/core';
 import { CanvasRenderer, SVGRenderer } from 'echarts/renderers';
 import type { MouseEvent, ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-
-import type {
-  LoadedSessionDocument,
-  LoadedSessionDocumentSection,
-  SessionDocumentSectionKind,
-} from '../lib/session-document';
 import {
   fmtCost,
   fmtPct,
@@ -41,6 +35,11 @@ import {
   formatModelName,
   modelColor,
 } from '../lib/analysis-format';
+import type {
+  LoadedSessionDocument,
+  LoadedSessionDocumentSection,
+  SessionDocumentSectionKind,
+} from '../lib/session-document';
 import './session-document.css';
 import sessionDocumentCssText from './session-document.css?raw';
 
@@ -57,6 +56,7 @@ export const SESSION_DOCUMENT_CSS_TEXT = sessionDocumentCssText;
 
 type ToolUseItem = Extract<ChatContentItem, { type: 'tool_use' }>;
 type ToolResultItem = Extract<ChatContentItem, { type: 'tool_result' }>;
+type ToolResultFile = NonNullable<ToolResultItem['file']>;
 type SearchableMessageEntry = {
   searchId: string;
   text: string;
@@ -100,11 +100,82 @@ function renderTimestamp(timestamp: string | null): string {
   }
 }
 
+function splitEditorLines(text: string): string[] {
+  if (!text) {
+    return [];
+  }
+
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  if (lines.at(-1) === '') {
+    lines.pop();
+  }
+  return lines;
+}
+
+function countCharacters(text: string): number {
+  return Array.from(text).length;
+}
+
+function formatCount(value: number, unit: string): string {
+  return `${value.toLocaleString('ja-JP')}${unit}`;
+}
+
+function buildToolResultText(item: ToolResultItem): string {
+  return item.file?.content ?? item.content;
+}
+
+function buildToolResultPreview(item: ToolResultItem): string {
+  const preview = buildToolResultText(item).replaceAll('\n', ' ').trim();
+  if (preview) {
+    return preview.slice(0, 96);
+  }
+
+  return item.content.replaceAll('\n', ' ').slice(0, 96);
+}
+
+function buildToolResultFileSummary(file: ToolResultFile): string {
+  const charLabel = formatCount(countCharacters(file.content), '文字');
+  const visibleLineCount = file.num_lines;
+  const totalLines = file.total_lines;
+
+  if (file.start_line === 1 && visibleLineCount === totalLines) {
+    return `${formatCount(totalLines, '行')} · ${charLabel}`;
+  }
+
+  if (visibleLineCount === 0) {
+    return `0 / ${formatCount(totalLines, '行')} · ${charLabel}`;
+  }
+
+  const endLine = file.start_line + visibleLineCount - 1;
+  return `${file.start_line.toLocaleString('ja-JP')}-${endLine.toLocaleString('ja-JP')} / ${formatCount(totalLines, '行')} · ${charLabel}`;
+}
+
+function buildToolResultLineEntries(file: ToolResultFile): Array<{
+  id: string;
+  lineNo: number;
+  text: string;
+}> {
+  return splitEditorLines(file.content).map((text, offset) => {
+    const lineNo = file.start_line + offset;
+
+    return {
+      id: `${file.file_path}:${lineNo}`,
+      lineNo,
+      text,
+    };
+  });
+}
+
 function renderContentBody(item: ChatContentItem): string {
   if (item.type === 'tool_use') return JSON.stringify(item.input, null, 2);
-  if (item.type === 'tool_result') return item.content;
+  if (item.type === 'tool_result') {
+    return item.file
+      ? `${item.file.file_path}\n${buildToolResultText(item)}`
+      : item.content;
+  }
   if (item.type === 'advisor_call') return '[Advisor 呼び出し]';
-  if (item.type === 'advisor_result') return item.text ?? '[暗号化されたレスポンス]';
+  if (item.type === 'advisor_result')
+    return item.text ?? '[暗号化されたレスポンス]';
   return item.text;
 }
 
@@ -577,10 +648,19 @@ function ToolResultBlock({
   item: ToolResultItem;
   mode: SessionDocumentMode;
 }) {
-  const preview = item.content.replaceAll('\n', ' ').slice(0, 96);
   const className = item.is_error
     ? 'result-block result-block--error'
     : 'result-block';
+  const file = item.file;
+  const copyText = buildToolResultText(item);
+  const lineEntries = file ? buildToolResultLineEntries(file) : [];
+  const summaryMeta = file ? buildToolResultFileSummary(file) : null;
+  const preview = file ? summaryMeta ?? '' : buildToolResultPreview(item);
+  const metaValues = file
+    ? [file.file_path, summaryMeta].filter((value): value is string =>
+        Boolean(value),
+      )
+    : [];
 
   return (
     <details className={className}>
@@ -591,11 +671,29 @@ function ToolResultBlock({
         <span className="result-preview">{preview}</span>
         {mode === 'interactive' && (
           <span className="tool-summary__actions">
-            <CopyButton text={item.content} label="結果をコピー" />
+            <CopyButton text={copyText} label="結果をコピー" />
           </span>
         )}
       </summary>
-      <pre className="result-pre">{item.content}</pre>
+      {file ? (
+        <div className="result-body">
+          <ToolMetaRow values={metaValues} />
+          <div className="file-viewer-scroll">
+            <table className="file-viewer-table">
+              <tbody>
+                {lineEntries.map((line) => (
+                  <tr key={line.id} className="file-viewer-row">
+                    <td className="file-viewer-line-no">{line.lineNo}</td>
+                    <td className="file-viewer-code">{line.text || ' '}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <pre className="result-pre">{item.content}</pre>
+      )}
     </details>
   );
 }
@@ -609,7 +707,13 @@ function AdvisorCallBlock() {
   );
 }
 
-function AdvisorResultBlock({ item, mode }: { item: Extract<ChatContentItem, { type: 'advisor_result' }>; mode: SessionDocumentMode }) {
+function AdvisorResultBlock({
+  item,
+  mode,
+}: {
+  item: Extract<ChatContentItem, { type: 'advisor_result' }>;
+  mode: SessionDocumentMode;
+}) {
   if (item.text === null) {
     return (
       <div className="advisor-result-block advisor-result-block--redacted">
@@ -623,7 +727,9 @@ function AdvisorResultBlock({ item, mode }: { item: Extract<ChatContentItem, { t
     <details className="advisor-result-block" open>
       <summary>
         <span className="advisor-badge">Advisor</span>
-        <span className="advisor-result-preview">{item.text.slice(0, 80).replaceAll('\n', ' ')}</span>
+        <span className="advisor-result-preview">
+          {item.text.slice(0, 80).replaceAll('\n', ' ')}
+        </span>
         {mode === 'interactive' && (
           <span className="tool-summary__actions">
             <CopyButton text={item.text} label="レスポンスをコピー" />
@@ -648,7 +754,8 @@ function MessageContentItem({
   if (item.type === 'tool_result')
     return <ToolResultBlock item={item} mode={mode} />;
   if (item.type === 'advisor_call') return <AdvisorCallBlock />;
-  if (item.type === 'advisor_result') return <AdvisorResultBlock item={item} mode={mode} />;
+  if (item.type === 'advisor_result')
+    return <AdvisorResultBlock item={item} mode={mode} />;
 
   const isThinking = item.type === 'thinking';
   const className = [
@@ -935,7 +1042,11 @@ export function buildTimelineOption(
 
         const idx = items[0].dataIndex;
         const point = points[idx];
-        const advisorTotal = (point.advisor_input_tokens ?? 0) + (point.advisor_cache_read_tokens ?? 0) + (point.advisor_cache_write_tokens ?? 0) + (point.advisor_output_tokens ?? 0);
+        const advisorTotal =
+          (point.advisor_input_tokens ?? 0) +
+          (point.advisor_cache_read_tokens ?? 0) +
+          (point.advisor_cache_write_tokens ?? 0) +
+          (point.advisor_output_tokens ?? 0);
         const lines = [
           `<b>${xLabels[idx]}</b>`,
           `Total: ${fmtTokens(point.token_usage + advisorTotal)}`,
@@ -955,7 +1066,16 @@ export function buildTimelineOption(
       },
     },
     legend: {
-      data: ['Cache Hit', 'Cache Write', 'Input', 'Output', 'Adv Cache Hit', 'Adv Cache Write', 'Adv Input', 'Adv Output'],
+      data: [
+        'Cache Hit',
+        'Cache Write',
+        'Input',
+        'Output',
+        'Adv Cache Hit',
+        'Adv Cache Write',
+        'Adv Input',
+        'Adv Output',
+      ],
       bottom: 0,
       textStyle: {
         color: 'rgba(255,255,255,0.72)',
@@ -1230,8 +1350,14 @@ function AnalysisSummary({
       <div className="summary-grid" style={{ marginTop: 12 }}>
         <SummaryStat label="Total Input" value={fmtTokens(totalInput)} />
         <SummaryStat label="Output" value={fmtTokens(total.output_tokens)} />
-        <SummaryStat label="Cache Hit" value={fmtTokens(total.cache_read_tokens)} />
-        <SummaryStat label="Cache Write" value={fmtTokens(total.cache_creation_5m + total.cache_creation_1h)} />
+        <SummaryStat
+          label="Cache Hit"
+          value={fmtTokens(total.cache_read_tokens)}
+        />
+        <SummaryStat
+          label="Cache Write"
+          value={fmtTokens(total.cache_creation_5m + total.cache_creation_1h)}
+        />
       </div>
       <div className="analysis-summary__note">
         Token Usage = 最新リクエスト 1 件の総入力 + 総出力。Total Output と
@@ -1261,7 +1387,11 @@ function AnalysisSummary({
                     <td>{stats.requests}</td>
                     <td>{fmtTokens(stats.input_tokens)}</td>
                     <td>{fmtTokens(stats.cache_read_tokens)}</td>
-                    <td>{fmtTokens(stats.cache_creation_5m + stats.cache_creation_1h)}</td>
+                    <td>
+                      {fmtTokens(
+                        stats.cache_creation_5m + stats.cache_creation_1h,
+                      )}
+                    </td>
                     <td>{fmtTokens(stats.output_tokens)}</td>
                     <td>{fmtPct(stats.cache_hit_rate)}</td>
                     <td>{fmtCost(stats.cost_usd)}</td>
@@ -1286,11 +1416,19 @@ function AnalysisSummary({
         onClick={isInteractive ? () => setIsOpen((v) => !v) : undefined}
         role={isInteractive ? 'button' : undefined}
         tabIndex={isInteractive ? 0 : undefined}
-        onKeyDown={isInteractive ? (e) => { if (e.key === 'Enter' || e.key === ' ') setIsOpen((v) => !v); } : undefined}
+        onKeyDown={
+          isInteractive
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') setIsOpen((v) => !v);
+              }
+            : undefined
+        }
       >
         <h2 className="analysis-summary__title">{title}</h2>
         {isInteractive && (
-          <span className="analysis-summary__chevron">{isOpen ? '▴' : '▾'}</span>
+          <span className="analysis-summary__chevron">
+            {isOpen ? '▴' : '▾'}
+          </span>
         )}
         {subtitle && (
           <div className="analysis-summary__subtitle">{subtitle}</div>
@@ -1328,7 +1466,9 @@ function AnalysisSummary({
         isOpen && expandedContent
       ) : (
         <details className="analysis-summary__details">
-          <summary className="analysis-summary__details-summary">詳細 ▾</summary>
+          <summary className="analysis-summary__details-summary">
+            詳細 ▾
+          </summary>
           {expandedContent}
         </details>
       )}
@@ -1462,7 +1602,15 @@ function SearchToolbar({
             onClick={handleIconClick}
             aria-label="チャット内を検索"
           >
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <svg
+              viewBox="0 0 24 24"
+              width="15"
+              height="15"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
               <circle cx="11" cy="11" r="7" />
               <line x1="16.5" y1="16.5" x2="22" y2="22" />
             </svg>
@@ -1473,7 +1621,15 @@ function SearchToolbar({
             onClick={onScrollTop}
             aria-label="一番上へ"
           >
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <svg
+              viewBox="0 0 24 24"
+              width="15"
+              height="15"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
               <line x1="12" y1="19" x2="12" y2="5" />
               <polyline points="5 12 12 5 19 12" />
             </svg>
@@ -1508,7 +1664,9 @@ function SearchToolbar({
           <button
             type="button"
             className="session-search__button"
-            onMouseDown={(event) => { event.preventDefault(); }}
+            onMouseDown={(event) => {
+              event.preventDefault();
+            }}
             onClick={onPrevious}
             disabled={!hasMatches}
           >
@@ -1517,7 +1675,9 @@ function SearchToolbar({
           <button
             type="button"
             className="session-search__button"
-            onMouseDown={(event) => { event.preventDefault(); }}
+            onMouseDown={(event) => {
+              event.preventDefault();
+            }}
             onClick={onNext}
             disabled={!hasMatches}
           >
@@ -1526,7 +1686,9 @@ function SearchToolbar({
           <button
             type="button"
             className="session-search__button session-search__button--ghost"
-            onMouseDown={(event) => { event.preventDefault(); }}
+            onMouseDown={(event) => {
+              event.preventDefault();
+            }}
             onClick={onClear}
             disabled={!hasQuery}
           >
@@ -1535,11 +1697,21 @@ function SearchToolbar({
           <button
             type="button"
             className="session-search__icon-btn"
-            onMouseDown={(event) => { event.preventDefault(); }}
+            onMouseDown={(event) => {
+              event.preventDefault();
+            }}
             onClick={onScrollTop}
             aria-label="一番上へ"
           >
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <svg
+              viewBox="0 0 24 24"
+              width="15"
+              height="15"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
               <line x1="12" y1="19" x2="12" y2="5" />
               <polyline points="5 12 12 5 19 12" />
             </svg>
@@ -1691,7 +1863,9 @@ export function SessionDocument({
                 analysis={section.analysis}
                 mode={mode}
                 title={`${formatSectionKindLabel(section.kind)} Analysis`}
-                subtitle={section.kind !== 'session' ? section.subtitle : undefined}
+                subtitle={
+                  section.kind !== 'session' ? section.subtitle : undefined
+                }
                 dataFilePath={section.filePath}
                 className={[
                   'session-document__analysis',
@@ -1751,7 +1925,10 @@ export function SessionDocument({
             setActiveSearchIndex(0);
           }}
           onScrollTop={() => {
-            rootRef.current?.parentElement?.scrollTo({ top: 0, behavior: 'smooth' });
+            rootRef.current?.parentElement?.scrollTo({
+              top: 0,
+              behavior: 'smooth',
+            });
           }}
         />
       )}
