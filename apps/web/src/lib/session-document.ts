@@ -29,14 +29,27 @@ export type LoadedSessionDocument = {
 };
 
 function basenameWithoutJsonl(filePath: string): string {
-  return filePath.split('/').at(-1)?.replace(/\.jsonl$/, '') ?? 'session-export';
+  return (
+    filePath
+      .split('/')
+      .at(-1)
+      ?.replace(/\.jsonl$/, '') ?? 'session-export'
+  );
 }
 
 export function sessionDisplayLabel(session: Session): string {
   return session.first_message || session.session_id;
 }
 
-export function buildSessionDocumentSections(session: Session): SessionDocumentSection[] {
+function teamSessionDisplayLabel(
+  session: Session['team_sessions'][number],
+): string {
+  return session.description || session.name || session.session_id;
+}
+
+export function buildSessionDocumentSections(
+  session: Session,
+): SessionDocumentSection[] {
   return [
     {
       filePath: session.jsonl_path,
@@ -53,9 +66,19 @@ export function buildSessionDocumentSections(session: Session): SessionDocumentS
     ...session.team_sessions.map((teamSession) => ({
       filePath: teamSession.jsonl_path,
       kind: 'team' as const,
-      title: teamSession.description || teamSession.name || teamSession.session_id,
+      title: teamSessionDisplayLabel(teamSession),
       subtitle: `team · ${teamSession.team_name || teamSession.session_id}`,
     })),
+    ...session.team_sessions.flatMap((teamSession) =>
+      teamSession.subagents.map((subagent) => ({
+        filePath: subagent.jsonl_path,
+        kind: 'subagent' as const,
+        title: `${teamSessionDisplayLabel(teamSession)} / ${
+          subagent.description || subagent.agent_type
+        }`,
+        subtitle: `team subagent · ${subagent.agent_type}`,
+      })),
+    ),
   ];
 }
 
@@ -92,7 +115,9 @@ export function resolveSessionDocumentPlan(
   };
 }
 
-export function collectSessionDocumentFilePaths(sessions: Session[]): Set<string> {
+export function collectSessionDocumentFilePaths(
+  sessions: Session[],
+): Set<string> {
   const filePaths = new Set<string>();
 
   for (const session of sessions) {

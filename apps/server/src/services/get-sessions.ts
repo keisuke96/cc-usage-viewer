@@ -108,7 +108,9 @@ async function readSubagents(sessionDir: string): Promise<Subagent[]> {
       }),
     );
 
-    subagents.sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+    subagents.sort((left, right) =>
+      left.timestamp.localeCompare(right.timestamp),
+    );
 
     return subagents.map(({ timestamp: _timestamp, ...rest }) => rest);
   } catch {
@@ -158,9 +160,12 @@ async function checkTeamSession(jsonlPath: string): Promise<boolean> {
         };
         if (obj.type !== 'user') continue;
         const msgContent = obj.message?.content;
-        return typeof msgContent === 'string' && msgContent.includes('<teammate-message');
+        return (
+          typeof msgContent === 'string' &&
+          msgContent.includes('<teammate-message')
+        );
       } catch {
-        continue;
+        // ignore malformed line
       }
     }
     return false;
@@ -251,6 +256,9 @@ export async function getSessions(projectId: string): Promise<Session[]> {
   );
 
   const teamSessionMap = new Map<string, string>();
+  const sessionByPath = new Map(
+    sessions.map((session) => [session.jsonl_path, session] as const),
+  );
   const teamSessionIds = new Set<string>();
 
   for (const session of sessions) {
@@ -288,6 +296,7 @@ export async function getSessions(projectId: string): Promise<Session[]> {
         description: agent.description,
         name: agent.name,
         team_name: agent.team_name,
+        subagents: sessionByPath.get(agent.jsonl_path)?.subagents ?? [],
       });
     }
 

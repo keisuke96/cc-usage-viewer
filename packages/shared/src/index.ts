@@ -35,6 +35,7 @@ export const teamSessionSchema = z.object({
   description: z.string(),
   name: z.string(),
   team_name: z.string(),
+  subagents: z.array(subagentSchema),
 });
 
 export const sessionSchema = z.object({

@@ -1,9 +1,3 @@
-// ひらがな・カタカナを正規化（カタカナ→ひらがな変換）して同一視する
-function normalizeKana(str: string): string {
-  return str.replace(/[\u30A1-\u30F6]/g, (ch) =>
-    String.fromCharCode(ch.charCodeAt(0) - 0x60),
-  );
-}
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -28,16 +22,23 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { useUrlParam } from '../lib/use-url-state';
 
+import { fetchProjects, fetchSessions } from '../lib/api';
 import {
   loadSessionDocument,
   resolveSessionDocumentPlan,
   sessionDisplayLabel,
 } from '../lib/session-document';
-import { fetchProjects, fetchSessions } from '../lib/api';
 import { downloadSessionExportHtmlClient } from '../lib/session-export';
+import { useUrlParam } from '../lib/use-url-state';
 import { SessionPane } from './SessionPane';
+
+// ひらがな・カタカナを正規化（カタカナ→ひらがな変換）して同一視する
+function normalizeKana(str: string): string {
+  return str.replace(/[\u30A1-\u30F6]/g, (ch) =>
+    String.fromCharCode(ch.charCodeAt(0) - 0x60),
+  );
+}
 
 function renderTimestamp(timestamp: string | null): string {
   if (!timestamp) {
@@ -684,89 +685,100 @@ export function App() {
               </Alert>
             ) : (
               <List dense disablePadding>
-                {paginatedSessions.map((session) => (
-                  <ListItemButton
-                    key={session.session_id}
-                    selected={session.session_id === selectedSessionId}
-                    onClick={() => setSelectedSessionId(session.session_id)}
-                    sx={{
-                      py: 1,
-                      px: 2,
-                      flexDirection: 'column',
-                      alignItems: 'flex-start',
-                      borderBottom: 1,
-                      borderColor: 'divider',
-                    }}
-                  >
-                    <Typography
+                {paginatedSessions.map((session) => {
+                  const nestedSubagentCount = session.team_sessions.reduce(
+                    (sum, teamSession) => sum + teamSession.subagents.length,
+                    0,
+                  );
+                  const totalSubagentCount =
+                    session.subagents.length + nestedSubagentCount;
+
+                  return (
+                    <ListItemButton
+                      key={session.session_id}
+                      selected={session.session_id === selectedSessionId}
+                      onClick={() => setSelectedSessionId(session.session_id)}
                       sx={{
-                        fontSize: 13,
-                        fontWeight:
-                          session.jsonl_path === selectedSessionFile
-                            ? 600
-                            : 400,
-                        width: '100%',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      <HighlightedText
-                        text={sessionDisplayLabel(session)}
-                        query={sessionSearch}
-                      />
-                    </Typography>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 0.75,
-                        mt: 0.25,
+                        py: 1,
+                        px: 2,
+                        flexDirection: 'column',
+                        alignItems: 'flex-start',
+                        borderBottom: 1,
+                        borderColor: 'divider',
                       }}
                     >
                       <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ fontSize: 11 }}
+                        sx={{
+                          fontSize: 13,
+                          fontWeight:
+                            session.jsonl_path === selectedSessionFile
+                              ? 600
+                              : 400,
+                          width: '100%',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          lineHeight: 1.4,
+                        }}
                       >
-                        {renderTimestamp(session.timestamp)}
+                        <HighlightedText
+                          text={sessionDisplayLabel(session)}
+                          query={sessionSearch}
+                        />
                       </Typography>
-                      {session.subagents.length > 0 && (
-                        <Chip
-                          icon={
-                            <SmartToyIcon
-                              sx={{ fontSize: '11px !important' }}
-                            />
-                          }
-                          label={session.subagents.length}
-                          size="small"
-                          sx={{
-                            height: 16,
-                            fontSize: 10,
-                            '& .MuiChip-label': { px: 0.5 },
-                            '& .MuiChip-icon': { ml: 0.5 },
-                          }}
-                        />
-                      )}
-                      {session.team_sessions.length > 0 && (
-                        <Chip
-                          icon={
-                            <GroupsIcon sx={{ fontSize: '11px !important' }} />
-                          }
-                          label={session.team_sessions.length}
-                          size="small"
-                          sx={{
-                            height: 16,
-                            fontSize: 10,
-                            '& .MuiChip-label': { px: 0.5 },
-                            '& .MuiChip-icon': { ml: 0.5 },
-                          }}
-                        />
-                      )}
-                    </Box>
-                  </ListItemButton>
-                ))}
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 0.75,
+                          mt: 0.25,
+                        }}
+                      >
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ fontSize: 11 }}
+                        >
+                          {renderTimestamp(session.timestamp)}
+                        </Typography>
+                        {totalSubagentCount > 0 && (
+                          <Chip
+                            icon={
+                              <SmartToyIcon
+                                sx={{ fontSize: '11px !important' }}
+                              />
+                            }
+                            label={totalSubagentCount}
+                            size="small"
+                            sx={{
+                              height: 16,
+                              fontSize: 10,
+                              '& .MuiChip-label': { px: 0.5 },
+                              '& .MuiChip-icon': { ml: 0.5 },
+                            }}
+                          />
+                        )}
+                        {session.team_sessions.length > 0 && (
+                          <Chip
+                            icon={
+                              <GroupsIcon
+                                sx={{ fontSize: '11px !important' }}
+                              />
+                            }
+                            label={session.team_sessions.length}
+                            size="small"
+                            sx={{
+                              height: 16,
+                              fontSize: 10,
+                              '& .MuiChip-label': { px: 0.5 },
+                              '& .MuiChip-icon': { ml: 0.5 },
+                            }}
+                          />
+                        )}
+                      </Box>
+                    </ListItemButton>
+                  );
+                })}
               </List>
             )}
           </Box>
