@@ -8,6 +8,22 @@ import { getProjectsDir } from '../lib/projects-dir';
 
 const WORKTREE_MARKER = '--claude-worktrees-';
 
+type RawProject = {
+  id: string;
+  display_name: string;
+  path: string;
+  session_count: number;
+  latestTimestamp: string | null;
+};
+
+type WorktreeWithTimestamp = WorktreeProject & {
+  latestTimestamp: string | null;
+};
+
+type SortableProject = Project & {
+  latestTimestamp: string | null;
+};
+
 function isWorktreeProject(projectId: string): boolean {
   return projectId.includes(WORKTREE_MARKER);
 }
@@ -17,7 +33,9 @@ function getWorktreeBaseId(projectId: string): string {
 }
 
 function getWorktreeBranch(projectId: string): string {
-  return projectId.slice(projectId.indexOf(WORKTREE_MARKER) + WORKTREE_MARKER.length);
+  return projectId.slice(
+    projectId.indexOf(WORKTREE_MARKER) + WORKTREE_MARKER.length,
+  );
 }
 
 function projectDisplayName(projectId: string): string {
@@ -25,13 +43,39 @@ function projectDisplayName(projectId: string): string {
   return `~/${name.replace(/^-+/, '') || projectId}`;
 }
 
-type IndexInfo = { originalPath: string | null; latestTimestamp: string | null };
+function mergeLatestTimestamp(
+  current: string | null,
+  candidate: string | null,
+): string | null {
+  if (!candidate) return current;
+  if (!current || candidate > current) return candidate;
+  return current;
+}
+
+function compareLatestTimestamp(
+  left: { id: string; latestTimestamp: string | null },
+  right: { id: string; latestTimestamp: string | null },
+): number {
+  const l = left.latestTimestamp ?? '';
+  const r = right.latestTimestamp ?? '';
+  if (r !== l) return r.localeCompare(l);
+  return left.id.localeCompare(right.id);
+}
+
+type IndexInfo = {
+  originalPath: string | null;
+  latestTimestamp: string | null;
+};
 
 async function readIndexInfo(indexPath: string): Promise<IndexInfo> {
   try {
     const content = await readFile(indexPath, 'utf8');
-    const parsed = JSON.parse(content) as { originalPath?: unknown; entries?: unknown };
-    const originalPath = typeof parsed.originalPath === 'string' ? parsed.originalPath : null;
+    const parsed = JSON.parse(content) as {
+      originalPath?: unknown;
+      entries?: unknown;
+    };
+    const originalPath =
+      typeof parsed.originalPath === 'string' ? parsed.originalPath : null;
 
     let latestTimestamp: string | null = null;
     if (Array.isArray(parsed.entries)) {
@@ -53,8 +97,13 @@ async function readIndexInfo(indexPath: string): Promise<IndexInfo> {
   }
 }
 
-async function getLatestJsonlMtime(projectPath: string, entries: Dirent[]): Promise<string | null> {
-  const jsonlEntries = entries.filter((e) => e.isFile() && e.name.endsWith('.jsonl'));
+async function getLatestJsonlMtime(
+  projectPath: string,
+  entries: Dirent[],
+): Promise<string | null> {
+  const jsonlEntries = entries.filter(
+    (e) => e.isFile() && e.name.endsWith('.jsonl'),
+  );
   if (jsonlEntries.length === 0) return null;
 
   const mtimes = await Promise.all(
@@ -75,7 +124,9 @@ async function getLatestJsonlMtime(projectPath: string, entries: Dirent[]): Prom
 }
 
 async function countSessionFiles(entries: Dirent[]): Promise<number> {
-  return entries.filter((entry) => entry.isFile() && entry.name.endsWith('.jsonl')).length;
+  return entries.filter(
+    (entry) => entry.isFile() && entry.name.endsWith('.jsonl'),
+  ).length;
 }
 
 export async function getProjects(): Promise<Project[]> {
@@ -88,18 +139,24 @@ export async function getProjects(): Promise<Project[]> {
     return [];
   }
 
-  const rawProjects = await Promise.all(
+  const rawProjects: RawProject[] = await Promise.all(
     entries
       .filter((entry) => entry.isDirectory() && entry.name !== 'memory')
       .map(async (entry) => {
         const projectPath = path.join(projectsDir, entry.name);
         const indexPath = path.join(projectPath, 'sessions-index.json');
         const dirEntries = await readdir(projectPath, { withFileTypes: true });
-        const [{ originalPath, latestTimestamp: indexTimestamp }, sessionCount] =
-          await Promise.all([readIndexInfo(indexPath), countSessionFiles(dirEntries)]);
+        const [
+          { originalPath, latestTimestamp: indexTimestamp },
+          sessionCount,
+        ] = await Promise.all([
+          readIndexInfo(indexPath),
+          countSessionFiles(dirEntries),
+        ]);
 
         const latestTimestamp =
-          indexTimestamp ?? (await getLatestJsonlMtime(projectPath, dirEntries));
+          indexTimestamp ??
+          (await getLatestJsonlMtime(projectPath, dirEntries));
 
         return {
           id: entry.name,
@@ -111,12 +168,7 @@ export async function getProjects(): Promise<Project[]> {
       }),
   );
 
-  rawProjects.sort((left, right) => {
-    const l = left.latestTimestamp ?? '';
-    const r = right.latestTimestamp ?? '';
-    if (r !== l) return r.localeCompare(l);
-    return left.id.localeCompare(right.id);
-  });
+  rawProjects.sort(compareLatestTimestamp);
 
   // Separate worktrees from base projects
   const worktreeRaws = rawProjects.filter((p) => isWorktreeProject(p.id));
@@ -126,17 +178,18 @@ export async function getProjects(): Promise<Project[]> {
   const baseMap = new Map(baseRaws.map((p) => [p.id, p]));
 
   // Attach worktrees to their base projects
-  const worktreesByBase = new Map<string, WorktreeProject[]>();
-  const orphanWorktrees: WorktreeProject[] = [];
+  const worktreesByBase = new Map<string, WorktreeWithTimestamp[]>();
+  const orphanWorktrees: WorktreeWithTimestamp[] = [];
 
   for (const wt of worktreeRaws) {
     const baseId = getWorktreeBaseId(wt.id);
     const branch = getWorktreeBranch(wt.id);
-    const worktree: WorktreeProject = {
+    const worktree: WorktreeWithTimestamp = {
       id: wt.id,
       display_name: branch,
       path: wt.path,
       session_count: wt.session_count,
+      latestTimestamp: wt.latestTimestamp,
     };
 
     if (baseMap.has(baseId)) {
@@ -150,10 +203,28 @@ export async function getProjects(): Promise<Project[]> {
   }
 
   // Build final project list
-  const projects: Project[] = baseRaws.map(({ latestTimestamp: _lt, ...p }) => ({
-    ...p,
-    worktrees: worktreesByBase.get(p.id) ?? [],
-  }));
+  const projects: SortableProject[] = baseRaws.map(
+    ({ latestTimestamp, ...p }) => {
+      const worktrees = [...(worktreesByBase.get(p.id) ?? [])].sort(
+        compareLatestTimestamp,
+      );
+      const projectLatestTimestamp = worktrees.reduce(
+        (latest, worktree) =>
+          mergeLatestTimestamp(latest, worktree.latestTimestamp),
+        latestTimestamp,
+      );
+
+      return {
+        ...p,
+        worktrees: worktrees.map(
+          ({ latestTimestamp: _wtLatestTimestamp, ...worktree }) => ({
+            ...worktree,
+          }),
+        ),
+        latestTimestamp: projectLatestTimestamp,
+      };
+    },
+  );
 
   // Append orphan worktrees as standalone projects (no further nesting)
   for (const orphan of orphanWorktrees) {
@@ -163,8 +234,13 @@ export async function getProjects(): Promise<Project[]> {
       path: orphan.path,
       session_count: orphan.session_count,
       worktrees: [],
+      latestTimestamp: orphan.latestTimestamp,
     });
   }
 
-  return projects;
+  projects.sort(compareLatestTimestamp);
+
+  return projects.map(
+    ({ latestTimestamp: _latestTimestamp, ...project }) => project,
+  );
 }
