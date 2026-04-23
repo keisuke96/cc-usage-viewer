@@ -9,6 +9,8 @@ export type SessionDocumentSection = {
   kind: SessionDocumentSectionKind;
   title: string;
   subtitle: string;
+  navTitle: string;
+  parentFilePath: string | null;
 };
 
 export type SessionDocumentPlan = {
@@ -56,18 +58,24 @@ export function buildSessionDocumentSections(
       kind: 'session',
       title: 'メインセッション',
       subtitle: session.timestamp ?? session.session_id,
+      navTitle: 'メインセッション',
+      parentFilePath: null,
     },
     ...session.subagents.map((subagent) => ({
       filePath: subagent.jsonl_path,
       kind: 'subagent' as const,
       title: subagent.description || subagent.agent_type,
       subtitle: subagent.agent_type,
+      navTitle: subagent.description || subagent.agent_type,
+      parentFilePath: session.jsonl_path,
     })),
     ...session.team_sessions.map((teamSession) => ({
       filePath: teamSession.jsonl_path,
       kind: 'team' as const,
       title: teamSessionDisplayLabel(teamSession),
       subtitle: `team · ${teamSession.team_name || teamSession.session_id}`,
+      navTitle: teamSessionDisplayLabel(teamSession),
+      parentFilePath: session.jsonl_path,
     })),
     ...session.team_sessions.flatMap((teamSession) =>
       teamSession.subagents.map((subagent) => ({
@@ -77,6 +85,8 @@ export function buildSessionDocumentSections(
           subagent.description || subagent.agent_type
         }`,
         subtitle: `team subagent · ${subagent.agent_type}`,
+        navTitle: subagent.description || subagent.agent_type,
+        parentFilePath: teamSession.jsonl_path,
       })),
     ),
   ];
@@ -103,6 +113,8 @@ export function resolveSessionDocumentPlan(
           kind: 'session',
           title,
           subtitle: selectedSessionFile,
+          navTitle: title,
+          parentFilePath: null,
         },
       ],
     };

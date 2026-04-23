@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { SESSION_DOCUMENT_CSS_TEXT } from '../app/SessionDocument';
-import { SessionPane, SESSION_PANE_CSS_TEXT } from '../app/SessionPane';
+import { SESSION_PANE_CSS_TEXT, SessionPane } from '../app/SessionPane';
 import type { LoadedSessionDocument } from './session-document';
 
 type DownloadSessionExportArgs = {
@@ -21,9 +21,12 @@ const SESSION_PANE_EXPORT_JS = `
       tabs.forEach(function(tab){
         var tabIndex = Number(tab.getAttribute('data-session-pane-tab'));
         var active = tabIndex === index;
-        tab.classList.toggle('session-pane__tab--active', active);
-        tab.classList.toggle('session-pane__menu-item--active', active);
-        tab.setAttribute('aria-selected', active ? 'true' : 'false');
+        tab.classList.toggle('session-pane__outline-item--active', active);
+        if (active) {
+          tab.setAttribute('aria-current', 'true');
+        } else {
+          tab.removeAttribute('aria-current');
+        }
       });
       panels.forEach(function(panel){
         var panelIndex = Number(panel.getAttribute('data-session-pane-panel'));
@@ -37,8 +40,6 @@ const SESSION_PANE_EXPORT_JS = `
       tab.addEventListener('click', function(){
         var index = Number(tab.getAttribute('data-session-pane-tab'));
         if (!Number.isNaN(index)) activate(index);
-        var details = tab.closest('details');
-        if (details) details.removeAttribute('open');
       });
     });
   });
@@ -80,7 +81,7 @@ function ExportHtmlPage({
           mode="export"
           selectedSectionIndex={selectedSectionIndex}
         />
-        <script dangerouslySetInnerHTML={{ __html: SESSION_PANE_EXPORT_JS }} />
+        <script>{SESSION_PANE_EXPORT_JS}</script>
       </body>
     </html>
   );

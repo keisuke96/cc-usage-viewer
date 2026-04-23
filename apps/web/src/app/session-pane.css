@@ -58,62 +58,74 @@
   opacity: 0.72;
 }
 
-.session-pane__tabs-shell {
+.session-pane__content {
   display: flex;
-  align-items: stretch;
-  min-height: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.015);
-  flex-shrink: 0;
-}
-
-.session-pane__tabs {
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-  overflow-x: auto;
   flex: 1;
-  flex-shrink: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.session-pane__tab {
-  min-width: 0;
-  width: 220px;
+.session-pane__outline {
+  width: 296px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding: 14px 12px 20px;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.015) 100%
+  );
+}
+
+.session-pane__outline-tree {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  padding: 10px 14px 9px;
-  border: none;
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
-  border-bottom: 2px solid transparent;
+  gap: 6px;
+}
+
+.session-pane__outline-node {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.session-pane__outline-item {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 14px;
   background: transparent;
   color: var(--session-text-2);
   font: inherit;
   text-align: left;
-}
-
-.session-pane__tab:not(.session-pane__tab--static) {
   cursor: pointer;
   transition:
     background-color 0.15s ease,
+    border-color 0.15s ease,
     color 0.15s ease,
-    border-color 0.15s ease;
+    transform 0.15s ease;
 }
 
-.session-pane__tab:not(.session-pane__tab--static):hover {
-  background: rgba(255, 255, 255, 0.03);
+.session-pane__outline-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
   color: var(--session-text);
 }
 
-.session-pane__tab--active {
-  background: rgba(88, 166, 255, 0.08);
-  border-bottom-color: var(--session-blue);
+.session-pane__outline-item--active {
+  background: rgba(88, 166, 255, 0.1);
+  border-color: rgba(88, 166, 255, 0.28);
   color: var(--session-text);
+  box-shadow: 0 0 0 1px rgba(88, 166, 255, 0.12);
 }
 
-.session-pane__tab-headline,
-.session-pane__tab-meta {
+.session-pane__outline-headline,
+.session-pane__outline-meta {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -121,138 +133,85 @@
   min-width: 0;
 }
 
-.session-pane__tab-title,
-.session-pane__tab-subtitle {
+.session-pane__outline-headline {
+  justify-content: space-between;
+}
+
+.session-pane__outline-title,
+.session-pane__outline-subtitle {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.session-pane__tab-title {
-  width: 100%;
+.session-pane__outline-title {
   font-size: 12px;
-  line-height: 1.25;
+  line-height: 1.3;
   font-weight: 600;
   color: inherit;
 }
 
-.session-pane__tab-meta {
+.session-pane__outline-branch {
+  flex-shrink: 0;
+  min-width: 18px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--session-text-3);
+  font-size: 10px;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.session-pane__outline-meta {
   color: var(--session-text-3);
   font-size: 10px;
   line-height: 1.3;
   min-height: 13px;
 }
 
-.session-pane__tab-subtitle {
+.session-pane__outline-subtitle {
   flex: 1;
   min-width: 0;
 }
 
-.session-pane__tab-models {
+.session-pane__outline-models {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
 }
 
-.session-pane__tab-model-dot {
+.session-pane__outline-model-dot {
   width: 6px;
   height: 6px;
   border-radius: 999px;
   display: inline-block;
 }
 
-.session-pane__tab-tokens {
+.session-pane__outline-tokens {
   flex-shrink: 0;
   font-family: "SFMono-Regular", ui-monospace, Menlo, monospace;
 }
 
-.session-pane__menu {
-  position: relative;
-  flex-shrink: 0;
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.session-pane__menu-trigger {
-  list-style: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 54px;
-  height: 100%;
-  padding: 0 14px;
-  cursor: pointer;
-  color: var(--session-text-2);
-  font-size: 11px;
-  user-select: none;
-}
-
-.session-pane__menu-trigger::-webkit-details-marker {
-  display: none;
-}
-
-.session-pane__menu[open] .session-pane__menu-trigger,
-.session-pane__menu-trigger:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--session-text);
-}
-
-.session-pane__menu-list {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 8px;
-  z-index: 10;
-  width: min(320px, calc(100vw - 32px));
-  max-height: 320px;
-  overflow-y: auto;
-  padding: 8px;
-  border: 1px solid var(--session-border);
-  border-radius: 14px;
-  background: #191919;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.38);
-}
-
-.session-pane__menu-item {
-  width: 100%;
+.session-pane__outline-children {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  padding: 9px 10px;
-  border: none;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--session-text-2);
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-}
-
-.session-pane__menu-item:hover,
-.session-pane__menu-item--active {
-  background: rgba(88, 166, 255, 0.08);
-  color: var(--session-text);
-}
-
-.session-pane__menu-title {
-  width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.session-pane__menu-subtitle {
-  width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 10px;
-  color: var(--session-text-3);
+  gap: 6px;
+  margin-left: 14px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .session-pane__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.session-pane__panel {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -268,33 +227,39 @@
   height: auto;
 }
 
+.session-pane--export .session-pane__content {
+  overflow: visible;
+}
+
 .session-pane--export .session-pane__body {
   overflow: visible;
+}
+
+.session-pane--export .session-pane__panel {
+  overflow: visible;
+  min-height: auto;
   padding-bottom: 0;
 }
 
-@media (max-width: 800px) {
+@media (max-width: 960px) {
   .session-pane__header {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .session-pane__body {
+  .session-pane__content {
+    flex-direction: column;
+  }
+
+  .session-pane__outline {
+    width: auto;
+    max-height: 240px;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .session-pane__panel {
     padding-left: 12px;
     padding-right: 12px;
-  }
-
-  .session-pane--export {
-    min-height: auto;
-  }
-
-  .session-pane__tab {
-    width: 180px;
-  }
-
-  .session-pane__menu-trigger {
-    min-width: 48px;
-    padding-left: 10px;
-    padding-right: 10px;
   }
 }
