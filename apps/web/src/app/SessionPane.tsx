@@ -1,3 +1,7 @@
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import { useState } from 'react';
+
 import { fmtTokens, modelColor } from '../lib/analysis-format';
 import type {
   LoadedSessionDocument,
@@ -177,11 +181,13 @@ export function SessionPane({
   onExportHtml,
   isExportingHtml = false,
 }: SessionPaneProps) {
+  const [isOutlineCollapsed, setIsOutlineCollapsed] = useState(false);
   const activeIndex = clampSectionIndex(
     document.sections.length,
     selectedSectionIndex,
   );
   const showOutline = document.sections.length > 1;
+  const canCollapseOutline = mode === 'interactive' && showOutline;
   const outlineSections =
     mode === 'interactive' && activeSection
       ? document.sections.map((section, index) =>
@@ -199,6 +205,9 @@ export function SessionPane({
         mode === 'export'
           ? 'session-pane--export'
           : 'session-pane--interactive',
+        canCollapseOutline && isOutlineCollapsed
+          ? 'session-pane--outline-collapsed'
+          : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -221,19 +230,44 @@ export function SessionPane({
 
       <div className="session-pane__content">
         {showOutline && (
-          <nav className="session-pane__outline" aria-label="Session Sections">
-            <div className="session-pane__outline-tree">
-              {sectionTree.map((node) => (
-                <SectionOutlineNode
-                  key={`${node.section.filePath}:${node.index}`}
-                  activeIndex={activeIndex}
-                  mode={mode}
-                  node={node}
-                  onSelect={onSectionSelect}
-                />
-              ))}
-            </div>
-          </nav>
+          <div className="session-pane__outline-shell">
+            {canCollapseOutline && (
+              <button
+                type="button"
+                className="session-pane__outline-toggle"
+                aria-label={
+                  isOutlineCollapsed
+                    ? 'セクション一覧を開く'
+                    : 'セクション一覧を閉じる'
+                }
+                aria-expanded={!isOutlineCollapsed}
+                onClick={() => setIsOutlineCollapsed((current) => !current)}
+              >
+                {isOutlineCollapsed ? (
+                  <ChevronRightIcon fontSize="small" />
+                ) : (
+                  <ChevronLeftIcon fontSize="small" />
+                )}
+              </button>
+            )}
+            <nav
+              className="session-pane__outline"
+              aria-label="Session Sections"
+              aria-hidden={isOutlineCollapsed ? 'true' : undefined}
+            >
+              <div className="session-pane__outline-tree">
+                {sectionTree.map((node) => (
+                  <SectionOutlineNode
+                    key={`${node.section.filePath}:${node.index}`}
+                    activeIndex={activeIndex}
+                    mode={mode}
+                    node={node}
+                    onSelect={onSectionSelect}
+                  />
+                ))}
+              </div>
+            </nav>
+          </div>
         )}
 
         <div className="session-pane__body">

@@ -131,6 +131,25 @@ export function App() {
     setSessionPage(0);
   }, [resolvedProjectId, sessionSearch]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia('(max-width: 1280px)');
+    const collapseProjectPane = () => {
+      if (mediaQuery.matches) {
+        setShowProjectPane(false);
+      }
+    };
+
+    collapseProjectPane();
+    mediaQuery.addEventListener('change', collapseProjectPane);
+    return () => {
+      mediaQuery.removeEventListener('change', collapseProjectPane);
+    };
+  }, []);
+
   const projects = projectsQuery.data ?? [];
 
   const visibleProjects = useMemo(() => {
@@ -305,7 +324,7 @@ export function App() {
       <Stack direction="row" spacing={0} sx={{ flex: 1, overflow: 'hidden' }}>
         <Box
           sx={{
-            width: showProjectPane ? 240 : 44,
+            width: showProjectPane ? 240 : 36,
             flexShrink: 0,
             borderRight: 1,
             borderColor: 'divider',
@@ -313,245 +332,266 @@ export function App() {
             flexDirection: 'column',
             overflow: 'hidden',
             bgcolor: 'rgba(0,0,0,0.25)',
-            transition: 'width 160ms ease',
+            transition: 'width 180ms ease',
           }}
         >
-          {showProjectPane ? (
-            <>
-              <Box
-                sx={{
-                  px: 2,
-                  py: 1.25,
-                  borderBottom: 1,
-                  borderColor: 'divider',
-                  flexShrink: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  <IconButton
-                    size="small"
-                    onClick={() => setShowProjectPane(false)}
-                    title="プロジェクト列を隠す"
-                    aria-label="プロジェクト列を隠す"
-                    sx={{ color: 'text.secondary' }}
-                  >
-                    <ChevronLeftIcon sx={{ fontSize: 20 }} />
-                  </IconButton>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      fontWeight: 600,
-                      color: 'text.secondary',
-                      letterSpacing: 0.3,
-                    }}
-                  >
-                    プロジェクト
-                  </Typography>
-                </Box>
-                {hiddenProjectCount > 0 && (
-                  <Button
-                    size="small"
-                    onClick={() => setShowEmptyProjects((value) => !value)}
-                    sx={{
-                      fontSize: 11,
-                      py: 0,
-                      minWidth: 0,
-                      color: 'primary.main',
-                    }}
-                  >
-                    {showEmptyProjects ? '空を非表示' : '空を表示'}
-                  </Button>
-                )}
-              </Box>
-              <Box
-                sx={{
-                  px: 1.5,
-                  py: 0.75,
-                  borderBottom: 1,
-                  borderColor: 'divider',
-                  flexShrink: 0,
-                }}
-              >
-                <TextField
-                  size="small"
-                  placeholder="プロジェクトを検索..."
-                  value={projectSearch}
-                  onChange={(e) => setProjectSearch(e.target.value)}
-                  fullWidth
-                  slotProps={{
-                    input: {
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon
-                            sx={{ fontSize: 14, color: 'text.disabled' }}
-                          />
-                        </InputAdornment>
-                      ),
-                      sx: { fontSize: 12 },
-                    },
-                  }}
-                  sx={{ '& .MuiInputBase-root': { height: 28 } }}
-                />
-              </Box>
-              <Box sx={{ flex: 1, overflowY: 'auto' }}>
-                {projectsQuery.isLoading ? (
-                  <Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
-                    <CircularProgress size={20} />
-                  </Box>
-                ) : projectsQuery.error ? (
-                  <Alert severity="error" sx={{ m: 1, fontSize: 12 }}>
-                    {(projectsQuery.error as Error).message}
-                  </Alert>
-                ) : (
-                  <>
-                    <List dense disablePadding>
-                      {visibleProjects.map((project) => {
-                        const isSelected = project.id === selectedProjectId;
-                        return (
-                          <Box key={project.id}>
-                            <ListItemButton
-                              selected={isSelected}
-                              onClick={() => setSelectedProjectId(project.id)}
-                              sx={{
-                                py: 1,
-                                px: 2,
-                                borderLeft: 3,
-                                borderColor: isSelected
-                                  ? 'primary.main'
-                                  : 'transparent',
-                              }}
-                            >
-                              <Box>
-                                <Typography
-                                  sx={{
-                                    fontSize: 13,
-                                    fontWeight: isSelected ? 700 : 400,
-                                    lineHeight: 1.3,
-                                  }}
-                                >
-                                  <HighlightedText
-                                    text={project.display_name}
-                                    query={projectSearch}
-                                  />
-                                </Typography>
-                                <Typography
-                                  variant="caption"
-                                  sx={{ color: 'text.secondary', fontSize: 11 }}
-                                >
-                                  {project.session_count} sessions
-                                </Typography>
-                              </Box>
-                            </ListItemButton>
-                            {project.worktrees.map((wt) => {
-                              const isWtSelected = wt.id === selectedProjectId;
-                              return (
-                                <ListItemButton
-                                  key={wt.id}
-                                  selected={isWtSelected}
-                                  onClick={() => setSelectedProjectId(wt.id)}
-                                  sx={{
-                                    py: 0.75,
-                                    pl: 3.5,
-                                    pr: 2,
-                                    borderLeft: 3,
-                                    borderColor: isWtSelected
-                                      ? 'primary.main'
-                                      : 'transparent',
-                                  }}
-                                >
-                                  <Box
-                                    sx={{
-                                      display: 'flex',
-                                      alignItems: 'flex-start',
-                                      gap: 0.5,
-                                    }}
-                                  >
-                                    <AccountTreeIcon
-                                      sx={{
-                                        fontSize: 12,
-                                        color: 'text.disabled',
-                                        mt: '3px',
-                                        flexShrink: 0,
-                                      }}
-                                    />
-                                    <Box>
-                                      <Typography
-                                        sx={{
-                                          fontSize: 12,
-                                          fontWeight: isWtSelected ? 700 : 400,
-                                          lineHeight: 1.3,
-                                          color: isWtSelected
-                                            ? 'text.primary'
-                                            : 'text.secondary',
-                                        }}
-                                      >
-                                        <HighlightedText
-                                          text={wt.display_name}
-                                          query={projectSearch}
-                                        />
-                                      </Typography>
-                                      <Typography
-                                        variant="caption"
-                                        sx={{
-                                          color: 'text.disabled',
-                                          fontSize: 10,
-                                        }}
-                                      >
-                                        {wt.session_count} sessions
-                                      </Typography>
-                                    </Box>
-                                  </Box>
-                                </ListItemButton>
-                              );
-                            })}
-                          </Box>
-                        );
-                      })}
-                    </List>
-                    {!showEmptyProjects && hiddenProjectCount > 0 && (
-                      <Box sx={{ px: 2, py: 1 }}>
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            color: 'text.disabled',
-                            fontSize: 11,
-                            cursor: 'pointer',
-                          }}
-                          onClick={() => setShowEmptyProjects(true)}
-                        >
-                          {hiddenProjectCount}{' '}
-                          件のセッションなしのプロジェクトを非表示
-                        </Typography>
-                      </Box>
-                    )}
-                  </>
-                )}
-              </Box>
-            </>
-          ) : (
+          <Box
+            sx={{
+              width: 240,
+              px: 0.75,
+              py: 1.25,
+              borderBottom: 1,
+              borderColor: 'divider',
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
             <Box
               sx={{
-                pt: 0.75,
                 display: 'flex',
-                justifyContent: 'flex-start',
-                px: 0.75,
-                flexShrink: 0,
+                alignItems: 'center',
+                gap: 0.75,
+                minWidth: 0,
               }}
             >
               <IconButton
                 size="small"
-                onClick={() => setShowProjectPane(true)}
-                title="プロジェクト列を表示"
-                aria-label="プロジェクト列を表示"
+                onClick={() => setShowProjectPane((value) => !value)}
+                title={
+                  showProjectPane
+                    ? 'プロジェクト列を隠す'
+                    : 'プロジェクト列を表示'
+                }
+                aria-label={
+                  showProjectPane
+                    ? 'プロジェクト列を隠す'
+                    : 'プロジェクト列を表示'
+                }
+                aria-expanded={showProjectPane}
                 sx={{ color: 'text.secondary' }}
               >
-                <ChevronRightIcon sx={{ fontSize: 20 }} />
+                {showProjectPane ? (
+                  <ChevronLeftIcon sx={{ fontSize: 20 }} />
+                ) : (
+                  <ChevronRightIcon sx={{ fontSize: 20 }} />
+                )}
               </IconButton>
+              <Typography
+                variant="caption"
+                sx={{
+                  fontWeight: 600,
+                  color: 'text.secondary',
+                  letterSpacing: 0.3,
+                  opacity: showProjectPane ? 1 : 0,
+                  transition: 'opacity 120ms ease',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                プロジェクト
+              </Typography>
             </Box>
-          )}
+            {hiddenProjectCount > 0 && (
+              <Button
+                size="small"
+                onClick={() => setShowEmptyProjects((value) => !value)}
+                tabIndex={showProjectPane ? 0 : -1}
+                sx={{
+                  fontSize: 11,
+                  py: 0,
+                  minWidth: 0,
+                  color: 'primary.main',
+                  opacity: showProjectPane ? 1 : 0,
+                  pointerEvents: showProjectPane ? 'auto' : 'none',
+                  transition: 'opacity 120ms ease',
+                }}
+              >
+                {showEmptyProjects ? '空を非表示' : '空を表示'}
+              </Button>
+            )}
+          </Box>
+          <Box
+            aria-hidden={!showProjectPane}
+            sx={{
+              width: 240,
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              opacity: showProjectPane ? 1 : 0,
+              transform: showProjectPane
+                ? 'translateX(0)'
+                : 'translateX(-8px)',
+              pointerEvents: showProjectPane ? 'auto' : 'none',
+              transition: 'opacity 120ms ease, transform 180ms ease',
+            }}
+          >
+            <Box
+              sx={{
+                px: 1.5,
+                py: 0.75,
+                borderBottom: 1,
+                borderColor: 'divider',
+                flexShrink: 0,
+              }}
+            >
+              <TextField
+                size="small"
+                placeholder="プロジェクトを検索..."
+                value={projectSearch}
+                onChange={(e) => setProjectSearch(e.target.value)}
+                fullWidth
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon
+                          sx={{ fontSize: 14, color: 'text.disabled' }}
+                        />
+                      </InputAdornment>
+                    ),
+                    sx: { fontSize: 12 },
+                  },
+                }}
+                sx={{ '& .MuiInputBase-root': { height: 28 } }}
+              />
+            </Box>
+            <Box sx={{ flex: 1, overflowY: 'auto' }}>
+              {projectsQuery.isLoading ? (
+                <Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
+                  <CircularProgress size={20} />
+                </Box>
+              ) : projectsQuery.error ? (
+                <Alert severity="error" sx={{ m: 1, fontSize: 12 }}>
+                  {(projectsQuery.error as Error).message}
+                </Alert>
+              ) : (
+                <>
+                  <List dense disablePadding>
+                    {visibleProjects.map((project) => {
+                      const isSelected = project.id === selectedProjectId;
+                      return (
+                        <Box key={project.id}>
+                          <ListItemButton
+                            selected={isSelected}
+                            onClick={() => setSelectedProjectId(project.id)}
+                            sx={{
+                              py: 1,
+                              px: 2,
+                              borderLeft: 3,
+                              borderColor: isSelected
+                                ? 'primary.main'
+                                : 'transparent',
+                            }}
+                          >
+                            <Box>
+                              <Typography
+                                sx={{
+                                  fontSize: 13,
+                                  fontWeight: isSelected ? 700 : 400,
+                                  lineHeight: 1.3,
+                                }}
+                              >
+                                <HighlightedText
+                                  text={project.display_name}
+                                  query={projectSearch}
+                                />
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                sx={{ color: 'text.secondary', fontSize: 11 }}
+                              >
+                                {project.session_count} sessions
+                              </Typography>
+                            </Box>
+                          </ListItemButton>
+                          {project.worktrees.map((wt) => {
+                            const isWtSelected = wt.id === selectedProjectId;
+                            return (
+                              <ListItemButton
+                                key={wt.id}
+                                selected={isWtSelected}
+                                onClick={() => setSelectedProjectId(wt.id)}
+                                sx={{
+                                  py: 0.75,
+                                  pl: 3.5,
+                                  pr: 2,
+                                  borderLeft: 3,
+                                  borderColor: isWtSelected
+                                    ? 'primary.main'
+                                    : 'transparent',
+                                }}
+                              >
+                                <Box
+                                  sx={{
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: 0.5,
+                                  }}
+                                >
+                                  <AccountTreeIcon
+                                    sx={{
+                                      fontSize: 12,
+                                      color: 'text.disabled',
+                                      mt: '3px',
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                  <Box>
+                                    <Typography
+                                      sx={{
+                                        fontSize: 12,
+                                        fontWeight: isWtSelected ? 700 : 400,
+                                        lineHeight: 1.3,
+                                        color: isWtSelected
+                                          ? 'text.primary'
+                                          : 'text.secondary',
+                                      }}
+                                    >
+                                      <HighlightedText
+                                        text={wt.display_name}
+                                        query={projectSearch}
+                                      />
+                                    </Typography>
+                                    <Typography
+                                      variant="caption"
+                                      sx={{
+                                        color: 'text.disabled',
+                                        fontSize: 10,
+                                      }}
+                                    >
+                                      {wt.session_count} sessions
+                                    </Typography>
+                                  </Box>
+                                </Box>
+                              </ListItemButton>
+                            );
+                          })}
+                        </Box>
+                      );
+                    })}
+                  </List>
+                  {!showEmptyProjects && hiddenProjectCount > 0 && (
+                    <Box sx={{ px: 2, py: 1 }}>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: 'text.disabled',
+                          fontSize: 11,
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => setShowEmptyProjects(true)}
+                      >
+                        {hiddenProjectCount}{' '}
+                        件のセッションなしのプロジェクトを非表示
+                      </Typography>
+                    </Box>
+                  )}
+                </>
+              )}
+            </Box>
+          </Box>
         </Box>
 
         <Box

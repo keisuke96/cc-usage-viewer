@@ -6,6 +6,12 @@
   color: var(--session-text);
 }
 
+.session-pane *,
+.session-pane *::before,
+.session-pane *::after {
+  box-sizing: border-box;
+}
+
 .session-pane__header {
   display: flex;
   align-items: flex-start;
@@ -65,17 +71,73 @@
   overflow: hidden;
 }
 
-.session-pane__outline {
+.session-pane__outline-shell {
+  position: relative;
   width: 296px;
   flex-shrink: 0;
-  overflow-y: auto;
-  padding: 14px 12px 20px;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   background: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.04) 0%,
     rgba(255, 255, 255, 0.015) 100%
   );
+}
+
+.session-pane--interactive .session-pane__outline-shell {
+  transition: width 180ms ease;
+}
+
+.session-pane--outline-collapsed .session-pane__outline-shell {
+  width: 36px;
+}
+
+.session-pane__outline-toggle {
+  position: absolute;
+  top: 12px;
+  left: 6px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--session-text-2);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+.session-pane__outline-toggle:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--session-text);
+}
+
+.session-pane__outline {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  padding: 14px 12px 20px;
+  opacity: 1;
+  transition:
+    opacity 120ms ease,
+    transform 180ms ease;
+}
+
+.session-pane--interactive .session-pane__outline {
+  padding-left: 36px;
+}
+
+.session-pane--outline-collapsed .session-pane__outline {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-8px);
 }
 
 .session-pane__outline-tree {
@@ -205,6 +267,7 @@
 
 .session-pane__body {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -213,6 +276,7 @@
 
 .session-pane__panel {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
   padding: 16px 20px 24px;
@@ -263,11 +327,21 @@
     flex-direction: column;
   }
 
-  .session-pane__outline {
+  .session-pane__outline-shell {
     width: auto;
     max-height: 240px;
     border-right: none;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    transition: height 180ms ease;
+  }
+
+  .session-pane--outline-collapsed .session-pane__outline-shell {
+    width: auto;
+    height: 36px;
+  }
+
+  .session-pane__outline {
+    max-height: 240px;
   }
 
   .session-pane__panel {

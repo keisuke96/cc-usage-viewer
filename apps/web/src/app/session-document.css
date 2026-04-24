@@ -209,6 +209,8 @@
 
 .table-wrap,
 .diff-scroll {
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
 }
 
@@ -776,6 +778,8 @@
 
 .tool-block,
 .result-block {
+  max-width: 100%;
+  min-width: 0;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   overflow: hidden;
@@ -929,6 +933,8 @@
 
 .tool-body,
 .result-body {
+  max-width: 100%;
+  min-width: 0;
   padding: 12px 14px 14px;
 }
 
@@ -944,6 +950,8 @@
 }
 
 .file-viewer-scroll {
+  max-width: 100%;
+  min-width: 0;
   overflow: auto;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
@@ -1137,9 +1145,12 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
 }
 
 .diff-card {
+  max-width: 100%;
+  min-width: 0;
   border: 1px solid var(--session-border);
   border-radius: 10px;
   overflow: hidden;
@@ -1177,6 +1188,8 @@
   width: max-content;
   min-width: 100%;
   border-collapse: collapse;
+  font-family: "SFMono-Regular", ui-monospace, Menlo, monospace;
+  font-size: 11px;
   table-layout: auto;
 }
 
