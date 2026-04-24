@@ -4,6 +4,7 @@ import Fastify from 'fastify';
 import { analyzeRoutes } from './routes/analyze';
 import { chatRoutes } from './routes/chat';
 import { projectsRoutes } from './routes/projects';
+import { sessionSectionRoutes } from './routes/session-section';
 import { sessionsRoutes } from './routes/sessions';
 
 const server = Fastify({
@@ -14,6 +15,7 @@ await server.register(projectsRoutes);
 await server.register(sessionsRoutes);
 await server.register(chatRoutes);
 await server.register(analyzeRoutes);
+await server.register(sessionSectionRoutes);
 
 server.get('/api/health', async () => {
   return healthResponseSchema.parse({

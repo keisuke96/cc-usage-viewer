@@ -197,7 +197,10 @@ function compareMessages(left: ChatMessage, right: ChatMessage): number {
 }
 
 export async function parseChat(jsonlPath: string): Promise<ChatMessage[]> {
-  const records = await readJsonl(jsonlPath);
+  return parseChatRecords(await readJsonl(jsonlPath));
+}
+
+export function parseChatRecords(records: unknown[]): ChatMessage[] {
   const byUuid = new Map<string, JsonRecord>();
   const uuidOrder: string[] = [];
 

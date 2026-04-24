@@ -1,6 +1,6 @@
 import type { AnalyzeResponse, ChatMessage, Session } from '@ccuv/shared';
 
-import { fetchAnalyze, fetchChat } from './api';
+import { fetchSessionSection } from './api';
 
 export type SessionDocumentSectionKind = 'session' | 'subagent' | 'team';
 
@@ -166,10 +166,9 @@ export async function loadSessionDocument(
 ): Promise<LoadedSessionDocument> {
   const sections = await Promise.all(
     plan.sections.map(async (section) => {
-      const [messages, analysis] = await Promise.all([
-        fetchChat(section.filePath),
-        fetchAnalyze([section.filePath]),
-      ]);
+      const { messages, analysis } = await fetchSessionSection(
+        section.filePath,
+      );
 
       return {
         ...section,

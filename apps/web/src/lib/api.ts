@@ -6,6 +6,8 @@ import {
   type Project,
   projectsResponseSchema,
   type Session,
+  type SessionSectionResponse,
+  sessionSectionResponseSchema,
   sessionsResponseSchema,
 } from '@ccuv/shared';
 
@@ -57,5 +59,18 @@ export async function fetchAnalyze(
   return requestJson(
     `/api/analyze?${params.toString()}`,
     analyzeResponseSchema,
+  );
+}
+
+export async function fetchSessionSection(
+  filePath: string,
+): Promise<SessionSectionResponse> {
+  const params = new URLSearchParams({
+    file: filePath,
+  });
+
+  return requestJson(
+    `/api/session-section?${params.toString()}`,
+    sessionSectionResponseSchema,
   );
 }

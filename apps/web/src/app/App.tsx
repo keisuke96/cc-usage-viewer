@@ -23,8 +23,9 @@ import { useQuery } from '@tanstack/react-query';
 import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 
-import { fetchProjects, fetchSessions } from '../lib/api';
+import { fetchProjects, fetchSessionSection, fetchSessions } from '../lib/api';
 import {
+  type LoadedSessionDocumentSection,
   loadSessionDocument,
   resolveSessionDocumentPlan,
   sessionDisplayLabel,
@@ -242,29 +243,43 @@ export function App() {
     setSelectedSectionTab(0);
   }, [selectedSessionFile]);
 
-  const documentQuery = useQuery({
-    queryKey: [
-      'session-document',
-      selectedDocumentPlan?.sections
-        .map((section) => section.filePath)
-        .join('|') ?? '',
-    ],
-    queryFn: () =>
-      loadSessionDocument(
-        selectedDocumentPlan as NonNullable<typeof selectedDocumentPlan>,
-      ),
-    enabled: selectedDocumentPlan !== null,
+  const activeSectionPlan =
+    selectedDocumentPlan?.sections[
+      Math.min(
+        Math.max(selectedSectionTab, 0),
+        Math.max((selectedDocumentPlan?.sections.length ?? 1) - 1, 0),
+      )
+    ] ?? null;
+
+  const activeSectionQuery = useQuery({
+    queryKey: ['session-section', activeSectionPlan?.filePath ?? ''],
+    queryFn: async (): Promise<LoadedSessionDocumentSection> => {
+      const section = activeSectionPlan as NonNullable<
+        typeof activeSectionPlan
+      >;
+      const { messages, analysis } = await fetchSessionSection(
+        section.filePath,
+      );
+
+      return {
+        ...section,
+        messages,
+        analysis,
+      };
+    },
+    enabled: activeSectionPlan !== null,
   });
 
   async function handleExportHtml(): Promise<void> {
-    if (!selectedDocumentPlan || !documentQuery.data || isExportingHtml) {
+    if (!selectedDocumentPlan || isExportingHtml) {
       return;
     }
 
     try {
       setIsExportingHtml(true);
+      const document = await loadSessionDocument(selectedDocumentPlan);
       await downloadSessionExportHtmlClient({
-        document: documentQuery.data,
+        document,
         selectedSectionIndex: selectedSectionTab,
       });
     } catch (error) {
@@ -819,17 +834,7 @@ export function App() {
                 セッションを選択してください。
               </Typography>
             </Box>
-          ) : documentQuery.isLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-              <CircularProgress size={28} />
-            </Box>
-          ) : documentQuery.error ? (
-            <Box sx={{ p: 3 }}>
-              <Alert severity="error">
-                {(documentQuery.error as Error).message}
-              </Alert>
-            </Box>
-          ) : !documentQuery.data ? (
+          ) : !selectedDocumentPlan ? (
             <Box sx={{ p: 3 }}>
               <Typography color="text.secondary">
                 document を読み込めませんでした。
@@ -837,8 +842,11 @@ export function App() {
             </Box>
           ) : (
             <SessionPane
-              document={documentQuery.data}
+              document={selectedDocumentPlan}
               mode="interactive"
+              activeSection={activeSectionQuery.data ?? null}
+              isSectionLoading={activeSectionQuery.isLoading}
+              sectionError={(activeSectionQuery.error as Error | null) ?? null}
               selectedSectionIndex={selectedSectionTab}
               onSectionSelect={setSelectedSectionTab}
               onExportHtml={() => {

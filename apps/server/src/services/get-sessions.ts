@@ -4,8 +4,9 @@ import path from 'node:path';
 
 import type { Session, Subagent, TeamSession } from '@ccuv/shared';
 
+import { readJsonl } from '../lib/jsonl';
 import { getProjectsDir } from '../lib/projects-dir';
-import { extractFirstUserMessage } from './extract-first-user-message';
+import { shouldSkipPrefixedText } from '../lib/skip-prefixes';
 import { extractTeamAgents } from './extract-team-agents';
 
 type SessionIndexEntry = {
@@ -16,10 +17,179 @@ type SessionIndexEntry = {
   modified?: unknown;
 };
 
+type JsonRecord = Record<string, unknown>;
+
+type SessionScanSummary = {
+  firstMessage: string;
+  requestCount: number;
+  isTeamSession: boolean;
+  hasTeamCreate: boolean;
+};
+
+type CachedSessionScanSummary = SessionScanSummary & {
+  mtimeMs: number;
+  size: number;
+};
+
+const sessionScanCache = new Map<string, CachedSessionScanSummary>();
+const teamAgentsCache = new Map<
+  string,
+  {
+    agents: Awaited<ReturnType<typeof extractTeamAgents>>;
+    mtimeMs: number;
+    size: number;
+  }
+>();
+const BUILTIN_COMMANDS = new Set(['/clear', '/new', '/exit', '/help']);
+
 function isValidProjectId(projectId: string): boolean {
   return (
     Boolean(projectId) && !projectId.includes('..') && !projectId.includes('/')
   );
+}
+
+function asRecord(value: unknown): JsonRecord | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as JsonRecord;
+}
+
+function extractTextContent(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  for (const item of content) {
+    const contentItem = asRecord(item);
+    if (contentItem?.type === 'text' && typeof contentItem.text === 'string') {
+      return contentItem.text;
+    }
+  }
+
+  return '';
+}
+
+function formatFirstUserMessage(text: string): string {
+  const stripped = text.trim();
+  if (!stripped || shouldSkipPrefixedText(stripped)) {
+    return '';
+  }
+
+  const displayLines: string[] = [];
+  for (const line of stripped.split('\n')) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine || BUILTIN_COMMANDS.has(trimmedLine)) {
+      continue;
+    }
+
+    displayLines.push(trimmedLine);
+  }
+
+  return displayLines.join(' ').slice(0, 120);
+}
+
+async function scanSessionJsonl(
+  jsonlPath: string,
+): Promise<SessionScanSummary> {
+  const fileStat = await stat(jsonlPath);
+  const cached = sessionScanCache.get(jsonlPath);
+  if (
+    cached &&
+    cached.mtimeMs === fileStat.mtimeMs &&
+    cached.size === fileStat.size
+  ) {
+    const { mtimeMs: _mtimeMs, size: _size, ...summary } = cached;
+    return summary;
+  }
+
+  const records = await readJsonl(jsonlPath);
+  const seenRequestIds = new Set<string>();
+  let firstMessage = '';
+  let requestCount = 0;
+  let isTeamSession = false;
+  let hasTeamCreate = false;
+
+  for (const record of records) {
+    const object = asRecord(record);
+    if (!object) {
+      continue;
+    }
+
+    const message = asRecord(object.message);
+    const content = message?.content;
+
+    if (object.type === 'user') {
+      const text = extractTextContent(content);
+      if (!firstMessage) {
+        firstMessage = formatFirstUserMessage(text);
+      }
+      if (
+        typeof content === 'string' &&
+        content.includes('<teammate-message')
+      ) {
+        isTeamSession = true;
+      }
+    }
+
+    if (object.type === 'assistant' && message?.usage) {
+      const requestId =
+        typeof object.requestId === 'string' ? object.requestId : null;
+      if (requestId) {
+        if (!seenRequestIds.has(requestId)) {
+          seenRequestIds.add(requestId);
+          requestCount += 1;
+        }
+      } else {
+        requestCount += 1;
+      }
+    }
+
+    if (!hasTeamCreate && JSON.stringify(record).includes('"TeamCreate"')) {
+      hasTeamCreate = true;
+    }
+  }
+
+  const summary = {
+    firstMessage,
+    requestCount,
+    isTeamSession,
+    hasTeamCreate,
+  };
+  sessionScanCache.set(jsonlPath, {
+    ...summary,
+    mtimeMs: fileStat.mtimeMs,
+    size: fileStat.size,
+  });
+
+  return summary;
+}
+
+async function extractTeamAgentsCached(
+  jsonlPath: string,
+): ReturnType<typeof extractTeamAgents> {
+  const fileStat = await stat(jsonlPath);
+  const cached = teamAgentsCache.get(jsonlPath);
+  if (
+    cached &&
+    cached.mtimeMs === fileStat.mtimeMs &&
+    cached.size === fileStat.size
+  ) {
+    return cached.agents;
+  }
+
+  const agents = await extractTeamAgents(jsonlPath);
+  teamAgentsCache.set(jsonlPath, {
+    agents,
+    mtimeMs: fileStat.mtimeMs,
+    size: fileStat.size,
+  });
+  return agents;
 }
 
 async function readSessionIndex(
@@ -118,71 +288,6 @@ async function readSubagents(sessionDir: string): Promise<Subagent[]> {
   }
 }
 
-async function countRequests(jsonlPath: string): Promise<number> {
-  try {
-    const content = await readFile(jsonlPath, 'utf8');
-    const seen = new Set<string>();
-    let count = 0;
-    for (const line of content.split('\n')) {
-      if (!line.trim() || !line.includes('"type":"assistant"')) continue;
-      try {
-        const obj = JSON.parse(line) as {
-          type?: unknown;
-          requestId?: unknown;
-          message?: { usage?: unknown };
-        };
-        if (obj.type !== 'assistant' || !obj.message?.usage) continue;
-        const rid = typeof obj.requestId === 'string' ? obj.requestId : null;
-        if (rid) {
-          if (seen.has(rid)) continue;
-          seen.add(rid);
-        }
-        count++;
-      } catch {
-        // ignore
-      }
-    }
-    return count;
-  } catch {
-    return 0;
-  }
-}
-
-async function checkTeamSession(jsonlPath: string): Promise<boolean> {
-  try {
-    const content = await readFile(jsonlPath, 'utf8');
-    for (const line of content.split('\n')) {
-      if (!line.includes('"type":"user"')) continue;
-      try {
-        const obj = JSON.parse(line) as {
-          type?: unknown;
-          message?: { content?: unknown };
-        };
-        if (obj.type !== 'user') continue;
-        const msgContent = obj.message?.content;
-        return (
-          typeof msgContent === 'string' &&
-          msgContent.includes('<teammate-message')
-        );
-      } catch {
-        // ignore malformed line
-      }
-    }
-    return false;
-  } catch {
-    return false;
-  }
-}
-
-async function hasTeamCreate(jsonlPath: string): Promise<boolean> {
-  try {
-    const content = await readFile(jsonlPath, 'utf8');
-    return content.includes('"TeamCreate"');
-  } catch {
-    return false;
-  }
-}
-
 function toNullableTimestamp(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
 }
@@ -211,9 +316,9 @@ export async function getSessions(projectId: string): Promise<Session[]> {
       const jsonlPath = path.join(projectPath, entry.name);
       const sessionId = entry.name.replace(/\.jsonl$/, '');
       const sessionDir = path.join(projectPath, sessionId);
-      const [subagents, requestCount] = await Promise.all([
+      const [subagents, scanSummary] = await Promise.all([
         readSubagents(sessionDir),
-        countRequests(jsonlPath),
+        scanSessionJsonl(jsonlPath),
       ]);
       const indexEntry = indexById.get(sessionId);
 
@@ -230,7 +335,7 @@ export async function getSessions(projectId: string): Promise<Session[]> {
           toNullableTimestamp(indexEntry.created) ??
           toNullableTimestamp(indexEntry.modified);
       } else {
-        firstMessage = await extractFirstUserMessage(jsonlPath);
+        firstMessage = scanSummary.firstMessage;
         try {
           const fileStat = await stat(jsonlPath);
           timestamp = fileStat.mtime.toISOString();
@@ -244,7 +349,7 @@ export async function getSessions(projectId: string): Promise<Session[]> {
         jsonl_path: jsonlPath,
         timestamp,
         first_message: firstMessage,
-        request_count: requestCount,
+        request_count: scanSummary.requestCount,
         subagents,
         team_sessions: [] as TeamSession[],
       } satisfies Session;
@@ -262,14 +367,14 @@ export async function getSessions(projectId: string): Promise<Session[]> {
   const teamSessionIds = new Set<string>();
 
   for (const session of sessions) {
-    if (await checkTeamSession(session.jsonl_path)) {
+    if ((await scanSessionJsonl(session.jsonl_path)).isTeamSession) {
       teamSessionMap.set(session.jsonl_path, session.session_id);
       teamSessionIds.add(session.session_id);
     }
   }
 
   for (const session of sessions) {
-    if (!(await hasTeamCreate(session.jsonl_path))) {
+    if (!(await scanSessionJsonl(session.jsonl_path)).hasTeamCreate) {
       continue;
     }
 
@@ -278,7 +383,7 @@ export async function getSessions(projectId: string): Promise<Session[]> {
     teamSessionIds.delete(session.session_id);
 
     const linkedTeamSessions: TeamSession[] = [];
-    const agents = await extractTeamAgents(session.jsonl_path);
+    const agents = await extractTeamAgentsCached(session.jsonl_path);
 
     for (const agent of agents) {
       if (!agent.jsonl_path) {

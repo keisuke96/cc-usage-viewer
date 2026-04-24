@@ -105,7 +105,12 @@ function asString(value: unknown): string {
 async function loadJsonlForAnalysis(
   path: string,
 ): Promise<Record<string, unknown>[]> {
-  const records = await readJsonl(path);
+  return collectRecordsForAnalysis(await readJsonl(path));
+}
+
+function collectRecordsForAnalysis(
+  records: unknown[],
+): Record<string, unknown>[] {
   const byId = new Map<string, Record<string, unknown>>();
   const noId: Record<string, unknown>[] = [];
 
@@ -359,13 +364,6 @@ function parseBashCmds(command: string): string[] {
 }
 
 async function extractToolStats(path: string): Promise<ToolStats> {
-  const toolCounts: Record<string, number> = {};
-  const bashCommands: Record<string, number> = {};
-  const skillCalls: Record<string, number> = {};
-  const agentCalls: Record<string, number> = {};
-  let toolErrors = 0;
-  let toolResultsTotal = 0;
-
   let records: unknown[];
   try {
     records = await readJsonl(path);
@@ -379,6 +377,17 @@ async function extractToolStats(path: string): Promise<ToolStats> {
       tool_results_total: 0,
     };
   }
+
+  return extractToolStatsFromRecords(records);
+}
+
+function extractToolStatsFromRecords(records: unknown[]): ToolStats {
+  const toolCounts: Record<string, number> = {};
+  const bashCommands: Record<string, number> = {};
+  const skillCalls: Record<string, number> = {};
+  const agentCalls: Record<string, number> = {};
+  let toolErrors = 0;
+  let toolResultsTotal = 0;
 
   for (const raw of records) {
     const obj = asRecord(raw);
@@ -502,6 +511,12 @@ async function extractUsageTimeline(
     return [];
   }
 
+  return extractUsageTimelineFromRecords(rawRecords);
+}
+
+function extractUsageTimelineFromRecords(
+  rawRecords: unknown[],
+): UsageTimelinePoint[] {
   const pointsById = new Map<string, UsageTimelinePoint & { _seq: number }>();
   let seq = 0;
   let latestUserSummary = '';
@@ -544,7 +559,9 @@ async function extractUsageTimeline(
     const ts = asString(obj.timestamp) || null;
 
     // advisorイテレーション分を抽出
-    const rawIterations = Array.isArray(usage.iterations) ? usage.iterations : [];
+    const rawIterations = Array.isArray(usage.iterations)
+      ? usage.iterations
+      : [];
     let advisorInputTokens = 0;
     let advisorCacheReadTokens = 0;
     let advisorCacheWriteTokens = 0;
@@ -555,7 +572,9 @@ async function extractUsageTimeline(
       const itCc = asRecord(itObj.cache_creation) ?? {};
       advisorInputTokens += asNumber(itObj.input_tokens);
       advisorCacheReadTokens += asNumber(itObj.cache_read_input_tokens);
-      advisorCacheWriteTokens += asNumber(itCc.ephemeral_5m_input_tokens) + asNumber(itCc.ephemeral_1h_input_tokens);
+      advisorCacheWriteTokens +=
+        asNumber(itCc.ephemeral_5m_input_tokens) +
+        asNumber(itCc.ephemeral_1h_input_tokens);
       advisorOutputTokens += asNumber(itObj.output_tokens);
     }
 
@@ -692,6 +711,21 @@ export async function analyzeFiles(
     by_model: agg.by_model as Record<string, TokenStats>,
     usage_timeline: mergedTimeline,
     tool_stats: mergeToolStats(allToolStats),
+    time_range: agg.time_range,
+  };
+}
+
+export async function analyzeRecords(
+  records: unknown[],
+): Promise<AnalyzeResponse> {
+  const analysisRecords = collectRecordsForAnalysis(records);
+  const agg = aggregate(analysisRecords);
+
+  return {
+    total: agg.total as TokenStats,
+    by_model: agg.by_model as Record<string, TokenStats>,
+    usage_timeline: await extractUsageTimelineFromRecords(records),
+    tool_stats: extractToolStatsFromRecords(records),
     time_range: agg.time_range,
   };
 }

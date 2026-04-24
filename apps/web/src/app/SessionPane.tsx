@@ -2,6 +2,8 @@ import { fmtTokens, modelColor } from '../lib/analysis-format';
 import type {
   LoadedSessionDocument,
   LoadedSessionDocumentSection,
+  SessionDocumentPlan,
+  SessionDocumentSection,
 } from '../lib/session-document';
 import { SessionDocument, type SessionDocumentMode } from './SessionDocument';
 import './session-pane.css';
@@ -10,8 +12,11 @@ import sessionPaneCssText from './session-pane.css?raw';
 export const SESSION_PANE_CSS_TEXT = sessionPaneCssText;
 
 type SessionPaneProps = {
-  document: LoadedSessionDocument;
+  document: SessionDocumentPlan | LoadedSessionDocument;
   mode: SessionDocumentMode;
+  activeSection?: LoadedSessionDocumentSection | null;
+  isSectionLoading?: boolean;
+  sectionError?: Error | null;
   selectedSectionIndex?: number;
   onSectionSelect?: (index: number) => void;
   onExportHtml?: () => void;
@@ -19,7 +24,7 @@ type SessionPaneProps = {
 };
 
 type SectionTreeNode = {
-  section: LoadedSessionDocumentSection;
+  section: SessionDocumentSection | LoadedSessionDocumentSection;
   index: number;
   children: SectionTreeNode[];
 };
@@ -38,7 +43,7 @@ function clampSectionIndex(
 }
 
 function buildSectionTree(
-  sections: LoadedSessionDocumentSection[],
+  sections: Array<SessionDocumentSection | LoadedSessionDocumentSection>,
 ): SectionTreeNode[] {
   const nodes: SectionTreeNode[] = sections.map((section, index) => ({
     section,
@@ -74,10 +79,12 @@ function SectionOutlineNode({
   node: SectionTreeNode;
   onSelect?: (index: number) => void;
 }) {
-  const total = node.section.analysis.total;
-  const totalTokens =
-    total.latest_total_input_tokens + total.latest_output_tokens;
-  const modelKeys = Object.keys(node.section.analysis.by_model);
+  const analysis = isLoadedSection(node.section) ? node.section.analysis : null;
+  const totalTokens = analysis
+    ? analysis.total.latest_total_input_tokens +
+      analysis.total.latest_output_tokens
+    : 0;
+  const modelKeys = analysis ? Object.keys(analysis.by_model) : [];
   const isActive = node.index === activeIndex;
   const className = [
     'session-pane__outline-item',
@@ -153,9 +160,18 @@ function SectionOutlineNode({
   );
 }
 
+function isLoadedSection(
+  section: SessionDocumentSection | LoadedSessionDocumentSection | undefined,
+): section is LoadedSessionDocumentSection {
+  return Boolean(section && 'messages' in section && 'analysis' in section);
+}
+
 export function SessionPane({
   document,
   mode,
+  activeSection,
+  isSectionLoading = false,
+  sectionError = null,
   selectedSectionIndex,
   onSectionSelect,
   onExportHtml,
@@ -166,7 +182,14 @@ export function SessionPane({
     selectedSectionIndex,
   );
   const showOutline = document.sections.length > 1;
-  const sectionTree = buildSectionTree(document.sections);
+  const outlineSections =
+    mode === 'interactive' && activeSection
+      ? document.sections.map((section, index) =>
+          index === activeIndex ? activeSection : section,
+        )
+      : document.sections;
+  const sectionTree = buildSectionTree(outlineSections);
+  const activePlanSection = document.sections[activeIndex];
 
   return (
     <div
@@ -215,30 +238,60 @@ export function SessionPane({
 
         <div className="session-pane__body">
           {document.sections.length > 0 ? (
-            document.sections.map((section, index) => {
-              const isActive = index === activeIndex;
+            mode === 'export' ? (
+              document.sections.map((section, index) => {
+                if (!isLoadedSection(section)) {
+                  return null;
+                }
 
-              return (
-                <div
-                  key={section.filePath}
-                  className={[
-                    'session-pane__panel',
-                    isActive ? 'session-pane__panel--active' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  data-session-pane-panel={index}
-                  hidden={!isActive}
-                >
-                  <SessionDocument
-                    document={{ ...document, sections: [section] }}
-                    mode={mode}
-                    view="both"
-                    selectedFilePath={isActive ? section.filePath : null}
-                  />
-                </div>
-              );
-            })
+                const isActive = index === activeIndex;
+
+                return (
+                  <div
+                    key={section.filePath}
+                    className={[
+                      'session-pane__panel',
+                      isActive ? 'session-pane__panel--active' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    data-session-pane-panel={index}
+                    hidden={!isActive}
+                  >
+                    <SessionDocument
+                      document={{ ...document, sections: [section] }}
+                      mode={mode}
+                      view="both"
+                      selectedFilePath={isActive ? section.filePath : null}
+                    />
+                  </div>
+                );
+              })
+            ) : isSectionLoading ? (
+              <div className="session-pane__panel session-pane__panel--status">
+                読み込み中...
+              </div>
+            ) : sectionError ? (
+              <div className="session-pane__panel session-pane__panel--status session-pane__panel--error">
+                {sectionError.message}
+              </div>
+            ) : activeSection && activePlanSection ? (
+              <div
+                className="session-pane__panel session-pane__panel--active"
+                data-session-pane-panel={activeIndex}
+              >
+                <SessionDocument
+                  document={{ ...document, sections: [activeSection] }}
+                  mode={mode}
+                  view="both"
+                  selectedFilePath={activePlanSection.filePath}
+                />
+              </div>
+            ) : (
+              <div className="session-pane__panel session-pane__panel--status">
+                section を読み込めませんでした。
+              </div>
+            )
           ) : (
             <div className="empty-state">document を読み込めませんでした。</div>
           )}

@@ -222,6 +222,18 @@
   display: none;
 }
 
+.session-pane__panel--status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--session-text-3);
+  font-size: 13px;
+}
+
+.session-pane__panel--error {
+  color: #ff9b9b;
+}
+
 .session-pane--export {
   min-height: auto;
   height: auto;

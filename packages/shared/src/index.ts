@@ -175,4 +175,13 @@ export type UsageTimelinePoint = z.infer<typeof usageTimelinePointSchema>;
 export type ToolStats = z.infer<typeof toolStatsSchema>;
 export type AnalyzeResponse = z.infer<typeof analyzeResponseSchema>;
 
+export const sessionSectionResponseSchema = z.object({
+  messages: chatMessagesResponseSchema,
+  analysis: analyzeResponseSchema,
+});
+
+export type SessionSectionResponse = z.infer<
+  typeof sessionSectionResponseSchema
+>;
+
 export * from './chat-presentation';
